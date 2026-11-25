@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<link rel="icon" href="data:,">
+<title>Tio Julius no Bairro</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1220; font-family: 'Arial Black', 'Segoe UI', Arial, sans-serif; }
+  #cena canvas { display: block; }
+  #grao { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(30,10,20,.55) 100%); mix-blend-mode: multiply; }
+  #carregando { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #ffd38a; font-size: 22px; letter-spacing: 1px; background: #1a1220; z-index: 5; }
+  /* balão */
+  #balao { position: fixed; left: 0; top: 0; display: none; width: min(78vw, 440px); background: #fffaf0; border: 4px solid #1b1b1b; border-radius: 22px; padding: 12px 16px 14px; box-shadow: 6px 6px 0 #1b1b1b; z-index: 3; will-change: transform; }
+  #balao:after { content: ''; position: absolute; left: 50%; bottom: -22px; margin-left: -14px; border: 14px solid transparent; border-top: 18px solid #1b1b1b; }
+  #balao.entra { animation: entra .35s cubic-bezier(.2,1.4,.4,1) both; }
+  #balao.sai { animation: sai .3s ease-in both; }
+  @keyframes entra { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
+  @keyframes sai { to { opacity: 0; scale: .8; } }
+  .b-topo { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  #b-foto { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #1b1b1b; object-fit: cover; background: #f59e0b; }
+  #b-nome { font-size: 15px; color: #c2410c; }
+  #b-perg { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 600; font-size: 15px; color: #555; background: #f1ebde; border-radius: 10px; padding: 5px 9px; margin-bottom: 8px; }
+  #b-resp { font-size: 21px; line-height: 1.25; color: #1b1b1b; min-height: 26px; }
+  /* placa do bairro */
+  #placa { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #0f5132; color: #fff; border: 3px solid #fff; border-radius: 6px; padding: 4px 14px; font-size: 18px; letter-spacing: 1px; box-shadow: 0 3px 0 rgba(0,0,0,.4); z-index: 2; white-space: nowrap; }
+  #status { position: fixed; bottom: 10px; left: 10px; color: #fff; font: 600 12px Arial; background: rgba(0,0,0,.55); padding: 5px 9px; border-radius: 8px; transition: opacity 1s; z-index: 4; }
+  #status.ok { color: #86efac; }
+  /* tela inicial */
+  #inicio { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: linear-gradient(#24205a, #7d4f8f 55%, #f08a5d); }
+  .card { width: min(88vw, 420px); background: #fffaf0; border: 4px solid #1b1b1b; border-radius: 18px; padding: 22px; box-shadow: 8px 8px 0 #1b1b1b; font-family: 'Segoe UI', Arial, sans-serif; }
+  .card h1 { font-family: 'Arial Black', Arial; margin: 0 0 4px; font-size: 26px; color: #c2410c; }
+  .card p { margin: 0 0 16px; color: #444; }
+  .card label { display: block; font-weight: 700; margin: 12px 0 4px; }
+  .card small { color: #777; font-weight: 400; }
+  .card input { width: 100%; box-sizing: border-box; font-size: 17px; padding: 10px; border: 3px solid #1b1b1b; border-radius: 10px; }
+  .card button { width: 100%; margin-top: 16px; font: 800 18px 'Arial Black', Arial; padding: 12px; border: 3px solid #1b1b1b; border-radius: 12px; cursor: pointer; box-shadow: 4px 4px 0 #1b1b1b; }
+  #btn-live { background: #f97316; color: #fff; }
+  #btn-teste { background: #fde68a; color: #1b1b1b; }
+</style>
+</head>
+<body>
+<div id="cena"></div>
+<div id="grao"></div>
+<div id="placa">BAIRRO DO TIO JULIUS</div>
+<div id="balao"><div class="b-topo"><img id="b-foto" alt=""><span id="b-nome"></span></div><div id="b-perg"></div><div id="b-resp"></div></div>
+<div id="status"></div>
+<div id="carregando">Carregando o bairro…</div>
+<div id="inicio">
+  <div class="card">
+    <h1>Tio Julius no Bairro</h1>
+    <p>O tio anda pela cidade e responde o chat da live com voz.</p>
+    <label>@ do TikTok da live</label>
+    <input id="in-user" placeholder="ex: animacaobarata" autocomplete="off">
+    <label>ID da voz do Fish Audio <small>(opcional)</small></label>
+    <input id="in-voz" placeholder="cole aqui o Model Id da voz" autocomplete="off">
+    <button id="btn-live">CONECTAR NA LIVE</button>
+    <button id="btn-teste">MODO TESTE (sem live)</button>
+  </div>
+</div>
+<script src="/socket.io/socket.io.js" onerror="window.io=undefined"></script>
+<script src="jogo.bundle.js"></script>
+</body>
+</html>

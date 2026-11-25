@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: tio-julius
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FISH_API_KEY
+        sync: false
+      - key: FISH_VOICE_ID
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
