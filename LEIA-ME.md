@@ -10,20 +10,22 @@ O tio anda por um bairro 3D estilo anos 80 e responde o chat da live com voz.
 3. Quando o Render pedir as variáveis, preencha:
    - `OPENAI_API_KEY`: sua chave da OpenAI (para respostas inteligentes). Pode deixar vazio: aí ele usa frases prontas, grátis.
    - `GEMINI_API_KEY`: opcional, alternativa grátis do Google no lugar da OpenAI.
-   - `FISH_API_KEY`: chave da API do Fish Audio (fish.audio → API Keys). Pode deixar vazio por enquanto.
-   - `FISH_VOICE_ID`: o ID da voz (Model Id). Pode deixar vazio e colar depois na tela inicial do jogo.
+   - `FISH_API_KEY`: chave da API do Fish Audio (fish.audio → API Keys).
+   - `FISH_VOICE_ID`: ID/Reference ID da voz cadastrada no Fish Audio.
 4. Espere o deploy terminar e abra o endereço que o Render mostrar (ex.: `https://tio-julius.onrender.com`).
 
 ## Como usar
 
-- Tela inicial: digite o @ da conta que está ao vivo e, se quiser, o ID da voz do Fish. Clique em CONECTAR NA LIVE.
+- Tela inicial: digite o @ da conta que está ao vivo e, se quiser, o ID/Reference ID da voz do Fish. Clique em CONECTAR NA LIVE.
 - MODO TESTE: comentários de exemplo, para ver e ouvir tudo funcionando sem live.
 - Link direto (para o TikTok LIVE Studio, sem precisar clicar):
   `https://SEU-ENDERECO.onrender.com/?user=SEU_ARROBA&voz=ID_DA_VOZ&auto=1`
 
 ## Voz
 
-1º Fish Audio (modelo grátis `s2.1-pro-free`) com o ID que você colocar.
+Para ativar o Fish Audio, cadastre `FISH_API_KEY` e `FISH_VOICE_ID` nas variáveis privadas do serviço no Render. A tela do jogo aceita somente o ID da voz; a chave deve ficar no Render e nunca no navegador, no link ou em arquivos públicos. Depois de salvar as variáveis, faça um novo deploy.
+
+1º Fish Audio (modelo `s2.1-pro-free`) com o ID configurado.
 2º Se o Fish falhar ou estiver sem chave/ID: voz grátis da Microsoft (Antonio, português).
 3º Se as duas falharem: a voz do próprio navegador.
 
