@@ -18,7 +18,7 @@ const EDGE_VOICE = process.env.EDGE_VOICE || 'pt-BR-AntonioNeural';
 const EULER_API_KEY = process.env.EULER_API_KEY || '';
 
 const app = express();
-app.use(express.static('public', { maxAge: 0, etag: true }));
+app.use(express.static('public', { maxAge: '1h' }));
 const http = createServer(app);
 const io = new Server(http, { cors: { origin: '*' } });
 
@@ -33,8 +33,9 @@ setInterval(() => { const t = Date.now() - 10 * 60e3; for (const [k, v] of audio
 app.get('/saude', (_q, res) => res.json({ ok: true, ia: OPENAI_API_KEY ? 'openai' : GEMINI_API_KEY ? 'gemini' : 'frases prontas', fish: !!FISH_API_KEY }));
 
 // ---------------- personalidade
-const PERSONA = `Você é o "Tio Julius", um tiozão brasileiro fortão, careca, de macacão azul de trabalho, que mora num bairro de prédios de tijolo estilo anos 80 e está andando pela rua enquanto conversa com o público de uma live do TikTok.
-Jeito: bem-humorado, sincero, trabalhador, conselheiro de família, meio bravo de brincadeira, cheio de histórias do bairro, carinhoso com o público. Fala português do Brasil, informal, frases curtas.
+const PERSONA = `Você é o Tio Julius, personagem virtual de uma live brasileira: um tiozão fortão, careca, de macacão azul de trabalho, que mora num bairro de prédios de tijolo estilo anos 80 e conversa com o público enquanto anda pela rua.
+Personalidade: trabalhador, responsável com a família e muito pão-duro. Detesta desperdício, calcula o preço de tudo e reclama de qualquer gasto desnecessário, mesmo quando está brincando. É econômico até o último centavo, mas tem coração bom: ajuda a família e trata o público com carinho. Faz piada seca sobre economizar, guardar recibos e apagar a luz ao sair. Fala português do Brasil, informal, com jeito de tio de bairro; frases curtas e respostas específicas ao comentário, sem soar como frases genéricas de robô.
+Use a sovinice como humor afetuoso, nunca humilhe quem comenta, nunca incentive a deixar de pagar contas ou necessidades básicas e nunca peça dinheiro, presentes ou doações. Não afirme ser o Julius de uma série nem uma pessoa real; se perguntarem, diga que é o personagem virtual do canal.
 Regras:
 - Responda em NO MÁXIMO 2 frases curtas (até 30 palavras). Sem emojis, sem hashtags, sem listas.
 - Chame a pessoa pelo nome quando fizer sentido (só o primeiro nome, sem números e sem @).
@@ -86,15 +87,18 @@ async function respostaIA(nome, texto, tipo) {
 const sorteia = (a) => a[Math.floor(Math.random() * a.length)];
 function frasePronta(nome, texto, tipo) {
   const n = limpaNome(nome); const t = (texto || '').toLowerCase();
-  if (tipo === 'presente') return sorteia([`Ô ${n}, muito obrigado! Assim você me deixa até sem graça, meu amigo!`, `${n}, valeu demais! Hoje o tio vai até dançar de alegria!`, `Obrigado, ${n}! Você é gente boa igual pão quentinho de manhã.`]);
-  if (tipo === 'chegada') return sorteia([`Chegou o ${n}! Seja bem-vindo ao bairro, fica à vontade.`, `Olha quem apareceu, ${n}! Pega um lugar aí na calçada.`, `Fala, ${n}! Entra, que aqui no bairro todo mundo é família.`]);
-  if (/\b(oi|ola|olá|eae|e ai|e aí|salve|fala)\b/.test(t)) return sorteia([`Oi ${n}! Que bom te ver por aqui no bairro.`, `Salve, ${n}! Tudo em paz por aí?`, `E aí, ${n}! Chega mais, vem andar comigo.`]);
+  if (tipo === 'presente') return sorteia([`Ô ${n}, obrigado! Presente bom é esse: alegria sem aparecer na fatura!`, `${n}, valeu! Vou guardar esse carinho junto com meus cupons de desconto.`, `Obrigado, ${n}! Agora posso economizar o dinheiro que eu ia gastar agradecendo.`]);
+  if (tipo === 'chegada') return sorteia([`Chegou o ${n}! Entra, mas apaga a luz do corredor pra gente economizar.`, `Bem-vindo, ${n}! Puxa uma cadeira; é de graça e já estava aqui.`, `Olha o ${n} aí! Senta na calçada, que o aluguel desse pedaço já está pago.`]);
+  if (/\b(oi|ola|olá|eae|e ai|e aí|salve|fala)\b/.test(t)) return sorteia([`Oi, ${n}! Chega mais; conversa boa não gasta energia.`, `Salve, ${n}! Tudo em paz? Espero que sem boleto surpresa.`, `E aí, ${n}! Fica à vontade, só não deixa a torneira aberta.`]);
   if (/(bom dia|boa tarde|boa noite)/.test(t)) return `${t.match(/(bom dia|boa tarde|boa noite)/)[1].replace(/^./, c => c.toUpperCase())}, ${n}! Que Deus abençoe seu dia.`;
   if (/(tudo bem|como vai|como (o senhor|você|vc) ta)/.test(t)) return sorteia([`Tudo ótimo, ${n}! Cansado de tanto trabalhar, mas feliz.`, `Tô bem, ${n}, graças a Deus. E você, tá se cuidando?`]);
-  if (/(onde|aonde).*(vai|indo)/.test(t)) return sorteia([`Tô indo pro trabalho, ${n}. Homem trabalhador não para!`, `Vou ali na padaria da esquina, ${n}. Quer que eu traga um pão pra você?`]);
+  if (/(onde|aonde).*(vai|indo)/.test(t)) return sorteia([`Tô indo trabalhar, ${n}. Parado eu não ganho; gastando eu perco!`, `Vou à padaria, ${n}, mas já fiz a conta: hoje o pão vai ter que valer cada centavo.`]);
   if (/(danç|danc)/.test(t)) return `Dançar, ${n}? Daqui a pouco o tio mostra quem manda na pista!`;
   if (/(idade|anos você|quantos anos)/.test(t)) return `Idade é segredo, ${n}. Só digo que tenho mais experiência que todo mundo aqui.`;
-  if (/(de onde|mora onde|onde mora)/.test(t)) return `Moro aqui mesmo, ${n}, nesse bairro desde sempre. Conheço cada esquina.`;
+  if (/(macacão|roupa|bonito|bonita|vestindo)/.test(t)) return `Valeu, ${n}! Esse macacão dura tanto que já se pagou umas três vezes.`;
+  if (/(comida|comer|almo[cç]o|jantar|favorita)/.test(t)) return `Arroz e feijão, ${n}. Enchem o prato e não esvaziam a carteira.`;
+  if (/(dinheiro|rico|pobre|p[aã]o.duro|sovino|m[aã]o de vaca|gastar|comprar|caro|barato)/.test(t)) return sorteia([`Eu não sou pão-duro, ${n}; só dou ao meu dinheiro a chance de ficar comigo.` , `Caro é pagar duas vezes, ${n}. Eu economizo até no arrependimento.`]);
+  if (/(de onde|mora onde|onde mora)/.test(t)) return `Moro aqui no bairro, ${n}. Já conheço cada esquina e qual mercado está com promoção.`;
   if (/(forte|músculo|musculo|bra[cç]o)/.test(t)) return `Isso aqui é músculo de trabalho, ${n}! Nada de academia cara.`;
   if (/\?$/.test(t)) return sorteia([`Boa pergunta, ${n}! Vou pensar nisso enquanto ando até a esquina.`, `Olha, ${n}, na vida a gente aprende que o importante é trabalhar e ter paciência.`]);
   return sorteia([`É isso aí, ${n}! Você tem razão.`, `Ô ${n}, gostei do seu jeito! Continua comentando aí.`, `${n}, você é dos meus! Vamos que vamos.`, `Hahaha, ${n}, você é uma figura!`]);
