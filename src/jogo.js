@@ -73,11 +73,17 @@ new GLTFLoader().load(window.MODELO || 'models/tio.glb', (g) => {
   const holder = new THREE.Group(); root.scale.multiplyScalar(s); root.position.y = -box.min.y * s; holder.add(root);
   scene.add(holder); tio.obj = holder;
   tio.mixer = new THREE.AnimationMixer(root);
+  let armScale = 1; root.traverse(o => { if (o.name === 'Armature') armScale = o.scale.x; });
   for (const clip of g.animations) {
-    // remove o deslocamento do quadril (andar no lugar)
-    for (const tr of clip.tracks) if (/Hips\.position$/.test(tr.name)) { const v = tr.values; for (let k = 0; k < v.length; k += 3) { v[k] = v[0]; v[k + 2] = v[2]; } }
+    // andar no lugar: o quadril anda para a frente no eixo 1 (e de lado no 0) — trava os dois e deixa só o sobe-e-desce (eixo 2)
+    if (/^(andar|virar)/.test(clip.name)) for (const tr of clip.tracks) if (/Hips\.position$/.test(tr.name)) {
+      const v = tr.values, n = v.length;
+      if (clip.name === 'andar') tio.passo = Math.abs(v[n - 2] - v[1]) * armScale * s / clip.duration; // metros por segundo dos pés
+      for (let k = 0; k < n; k += 3) { v[k] = v[0]; v[k + 1] = v[1]; }
+    }
     const a = tio.mixer.clipAction(clip); tio.acts[clip.name] = a;
   }
+  console.log('velocidade dos pés', tio.passo);
   tio.acts.andar.play();
   // sombra redonda
   const sh = new THREE.Mesh(new THREE.CircleGeometry(.55, 20), new THREE.MeshBasicMaterial({ map: glowTex(), color: 0x000000, transparent: true, opacity: .45, depthWrite: false }));
@@ -246,9 +252,9 @@ function loop() {
       const want = Math.atan2(dx, dz);
       let dy = want - tio.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       tio.yaw += Math.sign(dy) * Math.min(Math.abs(dy), 2.2 * dt);
-      const v = 1.38 * (1 - Math.min(.5, Math.abs(dy) / 2));
+      const VEL = tio.passo || 1.5, v = VEL * (1 - Math.min(.5, Math.abs(dy) / 2));
       tio.pos.x += Math.sin(tio.yaw) * v * dt; tio.pos.z += Math.cos(tio.yaw) * v * dt;
-      tio.acts.andar.timeScale = v / 1.38;
+      tio.acts.andar.timeScale = v / VEL;
       if (now > danceTimer && !tio.falando) { dancar(6); danceTimer = now + 100000 + rnd() * 60000; }
     } else if (tio.estado === 'danca' && now > tio.fimDanca) {
       tio.estado = 'andar'; trocar('andar', .5);
@@ -302,7 +308,7 @@ function loop() {
 }
 loop();
 window.__info = () => renderer.info.render;
-window.__dancar = dancar;
+window.__dancar = dancar; window.__tio = tio;
 
 // ---------------- conexão com o servidor ou modo demonstração
 const status = document.getElementById('status');

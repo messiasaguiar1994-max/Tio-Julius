@@ -18,7 +18,7 @@ const EDGE_VOICE = process.env.EDGE_VOICE || 'pt-BR-AntonioNeural';
 const EULER_API_KEY = process.env.EULER_API_KEY || '';
 
 const app = express();
-app.use(express.static('public', { maxAge: '1h' }));
+app.use(express.static('public', { maxAge: 0, etag: true }));
 const http = createServer(app);
 const io = new Server(http, { cors: { origin: '*' } });
 
