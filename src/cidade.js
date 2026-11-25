@@ -169,7 +169,7 @@ function merged(geos, mat, scene) {
 
 // ---------- construção
 export function buildCity(scene) {
-  const out = { steam: [], lampHeads: [] };
+  const out = { steam: [], lampHeads: [], semaforos: [] };
   const lam = (o) => new THREE.MeshLambertMaterial(o);
   // céu fim de tarde
   const sky = canvasTex(4, 512, (g, w, h) => {
@@ -247,13 +247,13 @@ export function buildCity(scene) {
           // escadinha da entrada (stoop)
           const sw = 1.8, off0 = rr(-w / 4, w / 4);
           for (let k = 0; k < 5; k++) {
-            const depth = 1.4 - k * .26, hh = .25 * (k + 1);
+            const depth = 1.15 - k * .21, hh = .25 * (k + 1);
             const c = s.ax === 'x' ? [mid + off0, s.fixed + s.out * depth / 2] : [s.fixed + s.out * depth / 2, mid + off0];
             stoopG.push(box(s.ax === 'x' ? sw : depth, hh, s.ax === 'x' ? depth : sw, c[0], hh / 2, c[1]));
           }
-          const r1 = s.ax === 'x' ? [mid + off0 - sw / 2, s.fixed + s.out * .7] : [s.fixed + s.out * .7, mid + off0 - sw / 2];
-          const r2 = s.ax === 'x' ? [mid + off0 + sw / 2, s.fixed + s.out * .7] : [s.fixed + s.out * .7, mid + off0 + sw / 2];
-          for (const r of [r1, r2]) ironG.push(box(s.ax === 'x' ? .05 : 1.4, .05, s.ax === 'x' ? 1.4 : .05, r[0], 1.6, r[1]), box(.05, 1, .05, r[0], 1.1, r[1]));
+          const r1 = s.ax === 'x' ? [mid + off0 - sw / 2, s.fixed + s.out * .58] : [s.fixed + s.out * .58, mid + off0 - sw / 2];
+          const r2 = s.ax === 'x' ? [mid + off0 + sw / 2, s.fixed + s.out * .58] : [s.fixed + s.out * .58, mid + off0 + sw / 2];
+          for (const r of [r1, r2]) ironG.push(box(s.ax === 'x' ? .05 : 1.15, .05, s.ax === 'x' ? 1.15 : .05, r[0], 1.6, r[1]), box(.05, 1, .05, r[0], 1.1, r[1]));
         }
         // cornija e telhado
         corniceG.push(box(ww + .5, .5, dd + .5, bx, h + .25, bz));
@@ -342,6 +342,13 @@ export function buildCity(scene) {
       const head = box(.6, .2, .35, px - sx * 1.5, 6.3, pz); lampHeads.push(head);
       out.lampHeads.push(new THREE.Vector3(px - sx * 1.5, 6.15, pz));
     }
+    // semáforos (dois por cruzamento)
+    for (const [sx, sz, axis] of [[-1, -1, 0], [1, 1, 1]]) {
+      const px = X + sx * (ROAD_HALF + .3), pz = Z + sz * (ROAD_HALF + .3);
+      lampPoles.push(cyl(.07, .07, 3.4, px, 1.7, pz, 6));
+      lampPoles.push(box(.38, 1.05, .32, px, 3.6, pz));
+      out.semaforos.push({ x: px, z: pz, axis, face: axis ? [0, -sz] : [-sx, 0] });
+    }
     // hidrante, lixeira, caixa azul
     const hx = X + (ROAD_HALF + .3), hz = Z - STREET / 2 - 6;
     propRed.push(cyl(.17, .2, .7, hx, .5, hz, 8), cyl(.12, .12, .2, hx, .95, hz, 8), box(.5, .1, .1, hx, .65, hz));
@@ -375,6 +382,34 @@ export function buildCity(scene) {
   const lg = new THREE.BufferGeometry().setFromPoints(out.lampHeads);
   const lamps = new THREE.Points(lg, new THREE.PointsMaterial({ map: gt, color: 0xffc070, size: 3, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: .55, fog: true }));
   lamps.matrixAutoUpdate = false; scene.add(lamps);
+  // lâmpadas dos semáforos (instanciadas, cor muda com o tempo)
+  const bulbGeo = new THREE.SphereGeometry(.1, 8, 6);
+  const nB = out.semaforos.length * 3;
+  const bulbs = new THREE.InstancedMesh(bulbGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), nB);
+  const m4 = new THREE.Matrix4();
+  out.semaforos.forEach((s, k) => {
+    for (let b = 0; b < 3; b++) {
+      const off = .17;
+      // as luzes ficam nos dois lados da caixa (dá para ver de qualquer rua)
+      m4.makeTranslation(s.x + (s.axis ? 0 : 0), 3.95 - b * .33, s.z); bulbs.setMatrixAt(k * 3 + b, m4.multiply(new THREE.Matrix4().makeScale(2.1, 1, 2.1)));
+    }
+  });
+  scene.add(bulbs);
+  const OFFC = [new THREE.Color(0x3a1010), new THREE.Color(0x3a3010), new THREE.Color(0x103a18)];
+  const ONC = [new THREE.Color(0xff3020), new THREE.Color(0xffc020), new THREE.Color(0x30ff60)];
+  let fase = -1;
+  out.atualizaSemaforos = (t) => {
+    const ciclo = t % 20, f = ciclo < 8 ? 0 : ciclo < 10 ? 1 : ciclo < 18 ? 2 : 3; // 0: eixo x verde, 1 amarelo, 2: eixo z verde, 3 amarelo
+    if (f === fase) return; fase = f;
+    out.semaforos.forEach((s, k) => {
+      const verde = (s.axis === 0 && f === 0) || (s.axis === 1 && f === 2);
+      const amarelo = (s.axis === 0 && f === 1) || (s.axis === 1 && f === 3);
+      const acesa = verde ? 2 : amarelo ? 1 : 0;
+      for (let b = 0; b < 3; b++) bulbs.setColorAt(k * 3 + b, b === acesa ? ONC[b] : OFFC[b]);
+    });
+    bulbs.instanceColor.needsUpdate = true;
+  };
+  out.atualizaSemaforos(0);
   return out;
 }
 

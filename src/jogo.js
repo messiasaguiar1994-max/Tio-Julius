@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { buildCity, buildCars, nodePos, N, P, STREET, rnd, glowTex } from './cidade.js';
 
 // ---------------- configuração (URL > localStorage)
@@ -29,7 +30,8 @@ const sun = new THREE.DirectionalLight(0xffb070, 2.2); sun.position.set(-60, 45,
 const city = buildCity(scene);
 
 // ---------------- rotas (grafo das esquinas)
-const OFF = 5.0; // distância da calçada ao eixo da rua
+const OFF = 5.4; // distância da calçada ao eixo da rua (tio)
+const OFF_NPC = 4.75; // pedestres andam mais perto do meio-fio
 const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 function makeWalker(off, startI, startJ) {
   return { i: startI, j: startJ, d: [1, 0], pts: [], off };
@@ -43,21 +45,18 @@ function nextSegment(w, avoidBack = true) {
   });
   let nd = opts.find(o => o[0] === w.d[0] && o[1] === w.d[1]);
   if (!nd || rnd() < .45) nd = opts[Math.floor(rnd() * opts.length)];
-  const prev = w.d;
+  const prev = w.d, off = w.off, ins = Math.abs(off);
   const A = new THREE.Vector2(nodePos(w.i), nodePos(w.j));
   const d = new THREE.Vector2(nd[0], nd[1]);
   const r = new THREE.Vector2(-d.y, d.x); // direita (x,z)
-  // se virou à esquerda: atravessa primeiro em frente, depois para o lado
-  const pr = new THREE.Vector2(-prev[1], prev[0]);
-  if (prev[0] === -nd[1] && prev[1] === nd[0] && w.pts.length) {
-    // nd = esquerda de prev
-    const pd = new THREE.Vector2(prev[0], prev[1]);
-    w.pts.push(A.clone().addScaledVector(pr, w.off).addScaledVector(pd, w.off));
-  }
-  w.pts.push(A.clone().addScaledVector(r, w.off).addScaledVector(d, w.off));
+  const pr = new THREE.Vector2(-prev[1], prev[0]), pd = new THREE.Vector2(prev[0], prev[1]);
+  const esquerda = prev[0] === -nd[1] && prev[1] === nd[0], direita = nd[0] === -prev[1] && nd[1] === prev[0];
+  // virando para o lado oposto da calçada: atravessa primeiro em frente, depois para o lado
+  if (w.pts.length && ((off > 0 && esquerda) || (off < 0 && direita))) w.pts.push(A.clone().addScaledVector(pr, off).addScaledVector(pd, ins));
+  w.pts.push(A.clone().addScaledVector(r, off).addScaledVector(d, ins));
   w.i += nd[0]; w.j += nd[1]; w.d = nd;
   const B = new THREE.Vector2(nodePos(w.i), nodePos(w.j));
-  w.pts.push(B.clone().addScaledVector(r, w.off).addScaledVector(d, -w.off));
+  w.pts.push(B.clone().addScaledVector(r, off).addScaledVector(d, -ins));
 }
 
 // ---------------- tio
@@ -107,8 +106,142 @@ export function dancar(seg = 6) {
   trocar(rnd() < .5 ? 'danca1' : 'danca2', .5);
 }
 
+
+// ---------------- pedestres (vida urbana)
+const npcs = [];
+const NPC_N = 14;
+const ROUPAS = [0xd63a2f, 0x7f9a3a, 0x9c6b3e, 0xa8a8a8, 0x6aa0e0, 0xb03060, 0xe0b040, 0x3a3a3a, 0x3fa39b, 0xe8dcc0, 0xb070c0, 0xe07a2a];
+const PELES = [[1, 1, 1], [1.25, 1.18, 1.1], [1.55, 1.42, 1.3], [1.8, 1.62, 1.45], [.85, .85, .85]];
+function recolorTex(img, roupa, pele) {
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
+  const rc = new THREE.Color(roupa); const R = rc.r * 255, G = rc.g * 255, B = rc.b * 255;
+  // brilho médio do tecido azul, para manter as dobras e sombras com a cor nova bem visível
+  let soma = 0, cont = 0;
+  for (let i = 0; i < p.length; i += 16) { const r = p[i], gg = p[i + 1], b = p[i + 2]; if (b > r + 12 && b > gg) { soma += (r + gg + b) / 3; cont++; } }
+  const media = cont ? soma / cont : 60;
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i], gg = p[i + 1], b = p[i + 2];
+    if (b > r + 12 && b > gg) { // tecido azul-marinho
+      const L = Math.min(1.6, (r + gg + b) / 3 / media) * 1.15;
+      p[i] = Math.min(255, R * L); p[i + 1] = Math.min(255, G * L); p[i + 2] = Math.min(255, B * L);
+    } else if (r > b + 18 && r >= gg) { // pele
+      p[i] = Math.min(255, r * pele[0]); p[i + 1] = Math.min(255, gg * pele[1]); p[i + 2] = Math.min(255, b * pele[2]);
+    }
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; return t;
+}
+function nodeNear() {
+  const w = tio.walker; const i = Math.max(0, Math.min(N, w.i + Math.floor(rnd() * 5) - 2)), j = Math.max(0, Math.min(N, w.j + Math.floor(rnd() * 5) - 2));
+  return [i, j];
+}
+function spawnNpc(n) {
+  const tw = tio.walker, modo = rnd();
+  let i, j, d, off;
+  if (modo < .7 && tw.d) {
+    // na mesma rua do tio, vindo na direção dele (metade na calçada dele, metade na da frente)
+    i = tw.i; j = tw.j; d = [-tw.d[0], -tw.d[1]]; off = rnd() < .5 ? -OFF_NPC : OFF_NPC;
+  } else {
+    [i, j] = nodeNear(); d = dirs[Math.floor(rnd() * 4)]; off = rnd() < .5 ? -OFF_NPC : OFF_NPC;
+  }
+  n.walker = makeWalker(off, i, j); n.walker.d = d;
+  // primeiro trecho: sai do nó na direção d (sem sortear)
+  const A = new THREE.Vector2(nodePos(i), nodePos(j)), dv = new THREE.Vector2(d[0], d[1]), r = new THREE.Vector2(-dv.y, dv.x), ins = Math.abs(off);
+  const ni = i + d[0], nj = j + d[1];
+  if (ni < 0 || nj < 0 || ni > N || nj > N) { nextSegment(n.walker, false); nextSegment(n.walker); }
+  else {
+    n.walker.pts.push(A.clone().addScaledVector(r, off).addScaledVector(dv, ins));
+    n.walker.i = ni; n.walker.j = nj;
+    n.walker.pts.push(new THREE.Vector2(nodePos(ni), nodePos(nj)).addScaledVector(r, off).addScaledVector(dv, -ins));
+    nextSegment(n.walker);
+  }
+  const p = n.walker.pts.shift(); n.pos.set(p.x, .16, p.y);
+  const q = n.walker.pts[0], f = rnd() * .7; n.pos.x += (q.x - p.x) * f; n.pos.z += (q.y - p.y) * f;
+  n.yaw = Math.atan2(q.x - p.x, q.y - p.y);
+}
+new GLTFLoader().load(window.MODELO_NPC || 'models/npc.glb', (g) => {
+  const base = g.scene; base.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(base, true); const h0 = box.max.y - box.min.y;
+  let armScale = 1; base.traverse(o => { if (o.name === 'Armature') armScale = o.scale.x; });
+  const clip = g.animations[0]; let passo = 1.5;
+  for (const tr of clip.tracks) if (/Hips\.position$/.test(tr.name)) { const v = tr.values, n = v.length; passo = Math.abs(v[n - 2] - v[1]) * armScale / h0 / clip.duration; for (let k = 0; k < n; k += 3) { v[k] = v[0]; v[k + 1] = v[1]; } }
+  let srcMat = null; base.traverse(o => { if (o.isMesh) srcMat = o.material; });
+  const img = srcMat.map.image;
+  const texs = []; for (let k = 0; k < 10; k++) texs.push(recolorTex(img, ROUPAS[(k * 5) % ROUPAS.length], PELES[k % PELES.length]));
+  const sombra = new THREE.MeshBasicMaterial({ map: glowTex(), color: 0x000000, transparent: true, opacity: .35, depthWrite: false });
+  const sGeo = new THREE.CircleGeometry(.45, 16);
+  for (let k = 0; k < NPC_N; k++) {
+    const m = cloneSkinned(base);
+    const altura = 1.6 + rnd() * .3, s = altura / h0, larg = .9 + rnd() * .25;
+    const mat = srcMat.clone(); mat.map = texs[k % texs.length]; mat.metalness = 0; mat.roughness = .9;
+    m.traverse(o => { if (o.isMesh) { o.material = mat; o.frustumCulled = false; } });
+    m.scale.set(s * larg, s, s * larg); m.position.y = -box.min.y * s;
+    const holder = new THREE.Group(); holder.add(m);
+    const sh = new THREE.Mesh(sGeo, sombra); sh.rotation.x = -Math.PI / 2; sh.position.y = .18; holder.add(sh);
+    scene.add(holder);
+    const mixer = new THREE.AnimationMixer(m); const a = mixer.clipAction(clip); a.play(); a.time = rnd() * clip.duration;
+    const vel = passo * altura * (.92 + rnd() * .1);
+    const n = { obj: holder, mixer, act: a, vel, pos: new THREE.Vector3(), yaw: 0, walker: null };
+    spawnNpc(n); npcs.push(n);
+  }
+});
+function atualizaNpcs(dt) {
+  for (const n of npcs) {
+    const w = n.walker;
+    while (w.pts.length < 4) nextSegment(w);
+    const t = w.pts[0], dx = t.x - n.pos.x, dz = t.y - n.pos.z;
+    if (Math.hypot(dx, dz) < .6) w.pts.shift();
+    let dy = Math.atan2(dx, dz) - n.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    n.yaw += Math.sign(dy) * Math.min(Math.abs(dy), 2.4 * dt);
+    let v = n.vel * (1 - Math.min(.5, Math.abs(dy) / 2));
+    // não esbarra no tio: espera um instante se ele estiver logo à frente
+    const fx = n.pos.x + Math.sin(n.yaw) * .9, fz = n.pos.z + Math.cos(n.yaw) * .9;
+    if (Math.hypot(fx - tio.pos.x, fz - tio.pos.z) < .75) v *= .2;
+    n.pos.x += Math.sin(n.yaw) * v * dt; n.pos.z += Math.cos(n.yaw) * v * dt;
+    n.act.timeScale = v / n.vel;
+    // longe demais do tio: reaparece perto (fora da câmera)
+    const dist = Math.hypot(n.pos.x - tio.pos.x, n.pos.z - tio.pos.z);
+    if (dist > 55) { spawnNpc(n); const d2 = Math.hypot(n.pos.x - camera.position.x, n.pos.z - camera.position.z); if (d2 < 12) spawnNpc(n); }
+    let visivel = dist < 60;
+    if (visivel && Math.hypot(n.pos.x - camera.position.x, n.pos.z - camera.position.z) < 1.8) visivel = false; // não atravessa a lente
+    n.obj.visible = visivel;
+    if (visivel) { n.mixer.update(dt); n.obj.position.copy(n.pos); n.obj.rotation.y = n.yaw; }
+  }
+}
+
+// ---------------- pombos (bando atravessando o céu)
+const BIRDS = 9;
+const birdGeo = new THREE.BufferGeometry();
+birdGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, .12, -.45, .12, -.05, 0, 0, -.18, 0, 0, .12, 0, 0, -.18, .45, .12, -.05], 3));
+birdGeo.computeVertexNormals();
+const birds = new THREE.InstancedMesh(birdGeo, new THREE.MeshBasicMaterial({ color: 0x2a2630, side: THREE.DoubleSide }), BIRDS);
+birds.frustumCulled = false; scene.add(birds);
+const bando = { t: 99, dur: 14, o: new THREE.Vector3(), d: new THREE.Vector3(), offs: [] };
+for (let k = 0; k < BIRDS; k++) bando.offs.push([(rnd() - .5) * 6, (rnd() - .5) * 2, (rnd() - .5) * 6, rnd() * 6]);
+const _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion(), _bs = new THREE.Vector3(), _bp = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+function atualizaPombos(dt) {
+  bando.t += dt;
+  if (bando.t > bando.dur + 10) { // novo voo a cada ~24 s
+    bando.t = 0; const a = rnd() * Math.PI * 2;
+    bando.d.set(Math.cos(a), 0, Math.sin(a));
+    bando.o.copy(tio.pos).addScaledVector(bando.d, -60); bando.o.y = 14 + rnd() * 8;
+  }
+  const yaw = Math.atan2(bando.d.x, bando.d.z);
+  for (let k = 0; k < BIRDS; k++) {
+    const o = bando.offs[k];
+    _bp.copy(bando.o).addScaledVector(bando.d, bando.t * 9); _bp.x += o[0]; _bp.y += o[1] + Math.sin(bando.t * 1.5 + o[3]) * .5; _bp.z += o[2];
+    const flap = Math.sin(bando.t * 14 + o[3]);
+    _bq.setFromAxisAngle(_up, yaw); _bs.set(1, flap, 1);
+    _bm.compose(_bp, _bq, _bs); birds.setMatrixAt(k, _bm);
+  }
+  birds.instanceMatrix.needsUpdate = true;
+  birds.visible = bando.t < bando.dur;
+}
+
 // ---------------- carros
-const PARK = 26, MOV = 6;
+const PARK = 30, MOV = 12;
 const cars = buildCars(scene, PARK + MOV);
 let ci = 0;
 for (let i = 0; i <= N && ci < PARK; i++) for (let j = 0; j <= N && ci < PARK; j++) {
@@ -172,11 +305,11 @@ const bFoto = document.getElementById('b-foto'), bNome = document.getElementById
 const tmpV = new THREE.Vector3(); let bw = 0, bh = 0, bx = -1, by = -1;
 function posicionaBalao() {
   if (!tio.obj || balao.style.display === 'none') return;
-  tmpV.copy(tio.pos); tmpV.y += 2.05; tmpV.project(camera);
-  let x = (tmpV.x * .5 + .5) * innerWidth, y = (-tmpV.y * .5 + .5) * innerHeight;
+  tmpV.copy(tio.pos); tmpV.y += 2.0; tmpV.project(camera);
+  let x = (tmpV.x * .5 + .5) * innerWidth, y = (-tmpV.y * .5 + .5) * innerHeight - 18; // ponta do balão acima da cabeça
   if (!bw) { bw = balao.offsetWidth; bh = balao.offsetHeight; }
   x = Math.max(bw / 2 + 8, Math.min(innerWidth - bw / 2 - 8, x));
-  y = Math.max(bh + 70, Math.min(innerHeight * .62, y));
+  y = Math.max(bh + 62, Math.min(innerHeight * .6, y));
   x = Math.round(x - bw / 2); y = Math.round(y - bh);
   if (x !== bx || y !== by) { bx = x; by = y; balao.style.transform = `translate(${x}px, ${y}px)`; }
 }
@@ -264,6 +397,7 @@ function loop() {
     // cabeça acompanha a fala
     if (tio.falando && tio.cabeca) { tio.cabeca.rotation.x += Math.sin(now / 160) * .05; tio.cabeca.rotation.y += Math.sin(now / 410) * .06; }
 
+    atualizaNpcs(dt); atualizaPombos(dt); city.atualizaSemaforos(now / 1000);
     // carros em movimento
     for (let k = 0; k < movers.length; k++) {
       const m = movers[k], w = m.w;
@@ -273,8 +407,14 @@ function loop() {
       const want = Math.atan2(dx, dz); let dy = want - m.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       m.yaw += Math.sign(dy) * Math.min(Math.abs(dy), 1.6 * dt);
       const ahead = Math.hypot(tio.pos.x - (m.x + Math.sin(m.yaw) * 4), tio.pos.z - (m.z + Math.cos(m.yaw) * 4));
-      const vv = ahead < 4.5 ? 0 : m.v * (1 - Math.min(.6, Math.abs(dy)));
+      let perto = ahead < 4.5;
+      if (!perto) { const ax = m.x + Math.sin(m.yaw) * 4, az = m.z + Math.cos(m.yaw) * 4; for (const n of npcs) if (Math.abs(n.pos.x - ax) < 2.5 && Math.abs(n.pos.z - az) < 2.5) { perto = true; break; } }
+      const vv = perto ? 0 : m.v * (1 - Math.min(.6, Math.abs(dy)));
       m.x += Math.sin(m.yaw) * vv * dt; m.z += Math.cos(m.yaw) * vv * dt;
+      if (Math.hypot(m.x - tio.pos.x, m.z - tio.pos.z) > 90) { // carro foi longe: volta para perto do tio
+        const [ni, nj] = nodeNear(); m.w = makeWalker(1.25, ni, nj); m.w.d = dirs[Math.floor(rnd() * 4)]; nextSegment(m.w, false); nextSegment(m.w);
+        const p = m.w.pts.shift(); m.x = p.x; m.z = p.y;
+      }
       cars.set(PARK + k, m.x, m.z, m.yaw - Math.PI / 2);
     }
     cars.commit();
@@ -308,7 +448,7 @@ function loop() {
 }
 loop();
 window.__info = () => renderer.info.render;
-window.__dancar = dancar; window.__tio = tio;
+window.__dancar = dancar; window.__tio = tio; window.__cam = camera; window.__npcs = npcs;
 
 // ---------------- conexão com o servidor ou modo demonstração
 const status = document.getElementById('status');
