@@ -178,7 +178,7 @@ export function buildCity(scene) {
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   }, false);
   scene.background = sky;
-  scene.fog = new THREE.Fog(0xe7a47a, 30, 135);
+  scene.fog = new THREE.Fog(0xe7a47a, 28, 115);
 
   // chão (asfalto)
   const asph = asphaltTex(); asph.repeat.set(60, 60);
@@ -207,6 +207,7 @@ export function buildCity(scene) {
     sideG.push(boxUV(BLOCK + 6, .16, BLOCK + 6, 3, 3, cx, .08, cz));
     curbG.push(box(BLOCK + 6.2, .17, .25, cx, .085, z0 - 3.05), box(BLOCK + 6.2, .17, .25, cx, .085, z1 + 3.05), box(.25, .17, BLOCK + 6.2, x0 - 3.05, .085, cz), box(.25, .17, BLOCK + 6.2, x1 + 3.05, .085, cz));
     const isCourt = bi === courtBlock[0] && bj === courtBlock[1];
+    const far = bi < 0 || bj < 0 || bi >= N || bj >= N; // quarteirões de fundo: menos detalhe
     // 4 lados: fachada voltada para a rua
     const sides = [
       { ax: 'x', from: x0, to: x1, fixed: z0, out: -1 }, // norte (rua em z0)
@@ -242,7 +243,7 @@ export function buildCity(scene) {
           g.rotateY(rot); g.translate(bx, 2, bz); sm.userData.geos.push(g);
           // marquise
           const [ax_, az_] = front(.6); roofG.push(box(s.ax === 'x' ? w : 1.2, .15, s.ax === 'x' ? 1.2 : w, ax_, 3.8, az_));
-        } else if (rnd() < .8) {
+        } else if (!far && rnd() < .8) {
           // escadinha da entrada (stoop)
           const sw = 1.8, off0 = rr(-w / 4, w / 4);
           for (let k = 0; k < 5; k++) {
@@ -257,13 +258,13 @@ export function buildCity(scene) {
         // cornija e telhado
         corniceG.push(box(ww + .5, .5, dd + .5, bx, h + .25, bz));
         roofG.push(box(ww - .2, .1, dd - .2, bx, h + .52, bz));
-        if (rnd() < .22) { // caixa d'água
+        if (!far && rnd() < .22) { // caixa d'água
           const tx = bx + rr(-2, 2), tz = bz + rr(-2, 2), th = h + .5;
           tankG.push(cyl(1.3, 1.3, 2.4, tx, th + 2.6, tz, 10)); const cone = new THREE.ConeGeometry(1.45, 1, 10); cone.translate(tx, th + 4.3, tz); tankG.push(cone);
           for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) tankG.push(box(.12, 1.4, .12, tx + a * .9, th + .7, tz + b * .9));
         }
         // escada de incêndio
-        if (floors >= 3 && rnd() < .45) {
+        if (!far && floors >= 3 && rnd() < .45) {
           const ew = Math.min(w - 1.5, 4), ec = mid + rr(-(w - ew) / 2 + .3, (w - ew) / 2 - .3);
           for (let f = 1; f < floors; f++) {
             const y = f * fh + (shop ? 1 : 0) + .1;
@@ -283,7 +284,7 @@ export function buildCity(scene) {
           }
         }
         // grafite no térreo de alguns
-        if (!shop && rnd() < .35) {
+        if (!far && !shop && rnd() < .35) {
           const k = Math.floor(rnd() * grafMats.length);
           const pl = new THREE.PlaneGeometry(Math.min(w - 1, 5), 2.5);
           const ang = s.ax === 'x' ? (s.out > 0 ? 0 : Math.PI) : (s.out > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -371,8 +372,9 @@ export function buildCity(scene) {
 
   // brilho dos postes
   const gt = glowTex();
-  const gm = new THREE.SpriteMaterial({ map: gt, color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: .55 });
-  for (const p of out.lampHeads) { const s = new THREE.Sprite(gm); s.position.copy(p); s.scale.set(3, 3, 1); scene.add(s); }
+  const lg = new THREE.BufferGeometry().setFromPoints(out.lampHeads);
+  const lamps = new THREE.Points(lg, new THREE.PointsMaterial({ map: gt, color: 0xffc070, size: 3, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: .55, fog: true }));
+  lamps.matrixAutoUpdate = false; scene.add(lamps);
   return out;
 }
 
@@ -399,9 +401,9 @@ export function buildCars(scene, count) {
     parts[0].setColorAt(i, c); parts[1].setColorAt(i, i % 3 === 0 ? new THREE.Color(0xe8e2d0) : c);
   }
   parts[0].instanceColor.needsUpdate = true; parts[1].instanceColor.needsUpdate = true;
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0), pv = new THREE.Vector3();
   return {
-    set(i, x, z, yaw) { q.setFromAxisAngle(up, yaw); m4.compose(new THREE.Vector3(x, 0, z), q, s); for (const p of parts) p.setMatrixAt(i, m4); },
+    set(i, x, z, yaw) { q.setFromAxisAngle(up, yaw); m4.compose(pv.set(x, 0, z), q, s); for (const p of parts) p.setMatrixAt(i, m4); },
     commit() { for (const p of parts) p.instanceMatrix.needsUpdate = true; },
   };
 }

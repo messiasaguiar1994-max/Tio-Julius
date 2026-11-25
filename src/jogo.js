@@ -14,13 +14,13 @@ const CFG = {
 
 // ---------------- render
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+let escala = 1; renderer.setPixelRatio(escala);
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 document.getElementById('cena').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 400);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 130);
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 
 scene.add(new THREE.HemisphereLight(0xffd9b0, 0x5a4a5a, 1.6));
@@ -122,39 +122,57 @@ for (let k = 0; k < MOV; k++) {
 }
 
 // ---------------- vapor dos bueiros
-const steamMat = new THREE.SpriteMaterial({ map: glowTex(), color: 0xe8e0d8, transparent: true, depthWrite: false, opacity: .25 });
-const puffs = [];
-for (const src of city.steam) for (let k = 0; k < 4; k++) { const s = new THREE.Sprite(steamMat.clone()); s.userData = { src, t: rnd() * 4 }; scene.add(s); puffs.push(s); }
+const PUFF = 3, puffN = city.steam.length * PUFF;
+const puffPos = new Float32Array(puffN * 3), puffCol = new Float32Array(puffN * 3), puffT = new Float32Array(puffN);
+for (let k = 0; k < puffN; k++) puffT[k] = rnd() * 4;
+const puffGeo = new THREE.BufferGeometry();
+puffGeo.setAttribute('position', new THREE.BufferAttribute(puffPos, 3)); puffGeo.setAttribute('color', new THREE.BufferAttribute(puffCol, 3));
+const puffs = new THREE.Points(puffGeo, new THREE.PointsMaterial({ map: glowTex(), size: 2.6, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
+puffs.frustumCulled = false; scene.add(puffs);
 
 // ---------------- câmera
 const camModos = ['atras', 'lado', 'frente', 'atras', 'alto', 'lado'];
 let camIdx = 0, camTroca = 0, camForce = null;
 const camPos = new THREE.Vector3(0, 5, 10), camLook = new THREE.Vector3();
-function alvoCamera(modo) {
-  const f = new THREE.Vector3(Math.sin(tio.yaw), 0, Math.cos(tio.yaw));
-  const r = new THREE.Vector3(-f.z, 0, f.x); // direita do tio (prédios ficam à direita)
-  const head = tio.pos.clone().add(new THREE.Vector3(0, 1.6, 0));
-  switch (modo) {
-    case 'atras': return [tio.pos.clone().addScaledVector(f, -4.2).addScaledVector(r, -1.2).add(new THREE.Vector3(0, 2.4, 0)), head.clone().addScaledVector(f, 2)];
-    case 'lado': return [tio.pos.clone().addScaledVector(r, -4.8).addScaledVector(f, 1.2).add(new THREE.Vector3(0, 1.7, 0)), head.clone().add(new THREE.Vector3(0, -.2, 0))];
-    case 'frente': return [tio.pos.clone().addScaledVector(f, 3.6).addScaledVector(r, -.9).add(new THREE.Vector3(0, 1.75, 0)), head.clone().add(new THREE.Vector3(0, -.1, 0))];
-    case 'alto': return [tio.pos.clone().addScaledVector(f, -7).addScaledVector(r, -6).add(new THREE.Vector3(0, 11, 0)), tio.pos.clone().addScaledVector(f, 3)];
-    case 'danca': return [tio.pos.clone().addScaledVector(r, -2.2).addScaledVector(f, 3.2).add(new THREE.Vector3(0, 1.5, 0)), head.clone().add(new THREE.Vector3(0, -.5, 0))];
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _h = new THREE.Vector3(), _cp = new THREE.Vector3(), _cl = new THREE.Vector3();
+const CAMS = { // [frente, direita, altura] da câmera ; [frente, altura] do alvo
+  atras: [-4.2, -1.2, 2.4, 2, 1.6], lado: [1.2, -4.8, 1.7, 0, 1.4], frente: [3.6, -.9, 1.75, 0, 1.5],
+  alto: [-7, -6, 11, 3, 0], danca: [3.2, -2.2, 1.5, 0, 1.1] };
+// impede a câmera de entrar nos prédios: fica sempre no corredor da rua
+function naRua(v) {
+  const lx = ((v.x - nodePos(0)) % P + P) % P, lz = ((v.z - nodePos(0)) % P + P) % P;
+  const dx = Math.min(lx, P - lx), dz = Math.min(lz, P - lz), lim = 6.3;
+  if (dx > lim && dz > lim) {
+    if (dx - lim < dz - lim) v.x += (lx < P / 2 ? -1 : 1) * (dx - lim);
+    else v.z += (lz < P / 2 ? -1 : 1) * (dz - lim);
   }
+  return v;
+}
+function alvoCamera(modo) {
+  const c = CAMS[modo];
+  _f.set(Math.sin(tio.yaw), 0, Math.cos(tio.yaw)); _r.set(-_f.z, 0, _f.x);
+  _cp.copy(tio.pos).addScaledVector(_f, c[0]).addScaledVector(_r, c[1]); _cp.y += c[2];
+  _cl.copy(tio.pos).addScaledVector(_f, c[3]); _cl.y += c[4];
+  naRua(_cp);
+  // se a parede empurrou a câmera para perto demais, sobe um pouco para enxergar por cima
+  const dh = Math.hypot(_cp.x - tio.pos.x, _cp.z - tio.pos.z);
+  if (dh < 3.2 && modo !== 'frente') _cp.y += (3.2 - dh) * 1.2;
+  return [_cp, _cl];
 }
 
 // ---------------- balão de fala
 const balao = document.getElementById('balao');
 const bFoto = document.getElementById('b-foto'), bNome = document.getElementById('b-nome'), bPerg = document.getElementById('b-perg'), bResp = document.getElementById('b-resp');
-const tmpV = new THREE.Vector3();
+const tmpV = new THREE.Vector3(); let bw = 0, bh = 0, bx = -1, by = -1;
 function posicionaBalao() {
   if (!tio.obj || balao.style.display === 'none') return;
-  tmpV.copy(tio.pos).add(new THREE.Vector3(0, 2.05, 0)).project(camera);
+  tmpV.copy(tio.pos); tmpV.y += 2.05; tmpV.project(camera);
   let x = (tmpV.x * .5 + .5) * innerWidth, y = (-tmpV.y * .5 + .5) * innerHeight;
-  const bw = balao.offsetWidth, bh = balao.offsetHeight;
+  if (!bw) { bw = balao.offsetWidth; bh = balao.offsetHeight; }
   x = Math.max(bw / 2 + 8, Math.min(innerWidth - bw / 2 - 8, x));
   y = Math.max(bh + 70, Math.min(innerHeight * .62, y));
-  balao.style.transform = `translate(${x - bw / 2}px, ${y - bh}px)`;
+  x = Math.round(x - bw / 2); y = Math.round(y - bh);
+  if (x !== bx || y !== by) { bx = x; by = y; balao.style.transform = `translate(${x}px, ${y}px)`; }
 }
 
 // fila de falas
@@ -170,7 +188,7 @@ async function tocarProxima() {
   bPerg.textContent = f.pergunta || '';
   bPerg.style.display = f.pergunta ? 'block' : 'none';
   bResp.textContent = '';
-  balao.style.display = 'block'; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra');
+  balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra');
   tio.falando = true; camForce = tio.estado === 'danca' ? null : 'frente';
   const texto = f.resposta;
   let dur = Math.max(2.5, texto.length / 14);
@@ -194,7 +212,7 @@ async function tocarProxima() {
   }
   // texto aparecendo junto com a fala
   const t0 = performance.now();
-  const tick = () => { const k = Math.min(1, (performance.now() - t0) / (dur * 1000 * .92)); bResp.textContent = texto.slice(0, Math.ceil(texto.length * k)); if (k < 1 && tio.falando) requestAnimationFrame(tick); };
+  let ultimo = -1; const tick = () => { const k = Math.min(1, (performance.now() - t0) / (dur * 1000 * .92)); const nn = Math.ceil(texto.length * k); if (nn !== ultimo) { ultimo = nn; bResp.textContent = texto.slice(0, nn); bw = 0; } if (k < 1 && tio.falando) requestAnimationFrame(tick); };
   tick();
   const limite = new Promise(r => setTimeout(r, (dur + 6) * 1000));
   if (!tocou) setTimeout(() => fim(), dur * 1000);
@@ -212,7 +230,7 @@ async function tocarProxima() {
 }
 
 // ---------------- loop
-const clock = new THREE.Clock();
+const clock = new THREE.Clock(); const perf = { n: 0, t: 0 };
 let danceTimer = performance.now() + 90000;
 function loop() {
   requestAnimationFrame(loop);
@@ -256,25 +274,34 @@ function loop() {
     cars.commit();
 
     // vapor
-    for (const s of puffs) {
-      const u = s.userData; u.t += dt; const life = 4; if (u.t > life) u.t -= life;
-      const k = u.t / life;
-      s.position.set(u.src.x + Math.sin(u.t * 1.3) * .4 * k, .2 + k * 3.5, u.src.z + Math.cos(u.t) * .3 * k);
-      const sc = .8 + k * 2.6; s.scale.set(sc, sc, 1); s.material.opacity = .28 * Math.sin(Math.PI * k);
+    for (let n = 0; n < puffN; n++) {
+      const src = city.steam[(n / PUFF) | 0]; let t = puffT[n] += dt; if (t > 4) t = puffT[n] -= 4;
+      const k = t / 4, b = .22 * Math.sin(Math.PI * k);
+      puffPos[n * 3] = src.x + Math.sin(t * 1.3) * .4 * k; puffPos[n * 3 + 1] = .3 + k * 3.2; puffPos[n * 3 + 2] = src.z + Math.cos(t) * .3 * k;
+      puffCol[n * 3] = b; puffCol[n * 3 + 1] = b * .97; puffCol[n * 3 + 2] = b * .94;
     }
+    puffGeo.attributes.position.needsUpdate = true; puffGeo.attributes.color.needsUpdate = true;
 
     // câmera
     if (now > camTroca && !camForce) { camIdx = (camIdx + 1) % camModos.length; camTroca = now + 9000 + rnd() * 6000; }
     const modo = tio.estado === 'danca' ? 'danca' : (camForce || camModos[camIdx]);
     const [cp, cl] = alvoCamera(modo);
-    const k = 1 - Math.exp(-dt * 1.6);
-    camPos.lerp(cp, k); camLook.lerp(cl, 1 - Math.exp(-dt * 3));
+    const k = 1 - Math.exp(-dt * 2.2);
+    camPos.lerp(cp, k); naRua(camPos); camLook.lerp(cl, 1 - Math.exp(-dt * 4));
     camera.position.copy(camPos); camera.lookAt(camLook);
   }
   renderer.render(scene, camera);
   posicionaBalao();
+  // resolução automática: se o PC não aguentar 50 fps, desenha em resolução menor
+  perf.n++; perf.t += dt;
+  if (perf.t > 2) {
+    const fps = perf.n / perf.t; perf.n = 0; perf.t = 0;
+    const alvo = fps < 48 ? Math.max(.55, escala - .1) : fps > 58 && escala < 1 ? Math.min(1, escala + .05) : escala;
+    if (alvo !== escala) { escala = alvo; renderer.setPixelRatio(escala); }
+  }
 }
 loop();
+window.__info = () => renderer.info.render;
 window.__dancar = dancar;
 
 // ---------------- conexão com o servidor ou modo demonstração
