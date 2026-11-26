@@ -16,6 +16,7 @@ const FISH_MODEL = process.env.FISH_MODEL || 's2.1-pro-free';
 const FISH_VOICE_ID = process.env.FISH_VOICE_ID || '';
 const EDGE_VOICE = process.env.EDGE_VOICE || 'pt-BR-AntonioNeural';
 const EULER_API_KEY = process.env.EULER_API_KEY || '';
+const MONOLOGO_SEG = Number(process.env.MONOLOGO_SEG || 35); // segundos de silêncio até ele falar sozinho (0 desliga)
 
 const app = express();
 app.use(express.static('public', { maxAge: '1h' }));
@@ -48,7 +49,9 @@ Regras:
 const limpaNome = (n) => (n || '').replace(/[@_.]/g, ' ').replace(/\d+/g, '').trim().split(/\s+/)[0]?.replace(/^./, c => c.toUpperCase()) || 'Amigo';
 
 async function respostaIA(nome, texto, tipo) {
-  const pedido = tipo === 'presente'
+  const pedido = tipo === 'monologo'
+    ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
+    : tipo === 'presente'
     ? `${limpaNome(nome)} mandou um presente (${texto}). Agradeça de um jeito engraçado e caloroso, numa frase só.`
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
@@ -85,8 +88,24 @@ async function respostaIA(nome, texto, tipo) {
 
 // respostas sem IA (grátis)
 const sorteia = (a) => a[Math.floor(Math.random() * a.length)];
+const TEMAS = ['conta de luz', 'conta de água', 'botijão de gás', 'mercado e promoções', 'roupas e sapatos velhos', 'passagem de ônibus', 'comida que sobra', 'celular e internet', 'presente de aniversário', 'consertar em vez de comprar', 'banho', 'geladeira', 'pasta de dente e sabonete', 'festa da família', 'restaurante', 'ventilador e calor', 'guardar recibos', 'carro e gasolina', 'cartão de crédito', 'feira no fim do dia'];
+const MONOLOGOS = [
+  'Sabonete pequeno não se joga fora: gruda no novo e vira um só. Economia de verdade é nos detalhes.',
+  'Pasta de dente acabou? Corta o tubo no meio. Ainda tem pra uma semana, no mínimo.',
+  'Luz acesa em cômodo vazio é dinheiro indo embora. Aqui em casa até a geladeira tem horário.',
+  'Feira boa é no fim do dia. Fruta meio amassada tem o mesmo gosto e custa metade.',
+  'Água do banho eu reaproveito pra lavar o quintal. Se a conta subir, alguém vai ter que me explicar.',
+  'Sapato com sola gasta? Um pouco de cola e paciência, e ele aguenta mais dois invernos.',
+  'Restaurante cobra até pelo guardanapo. Marmita de casa tem mais tempero e não tem taxa de serviço.',
+  'Presente bom é presente útil. Este ano todo mundo da família ganha um pacote de lâmpadas econômicas.',
+  'Ventilador ligado só quando o suor passar da testa. Antes disso é frescor natural.',
+  'Guardo todo recibo numa caixa de sapato. Nunca se sabe quando uma loja vai tentar te enganar.',
+  'Controle remoto sem pilha? Esfrega a pilha velha na mão que ela ganha mais um mês de vida.',
+  'Gasolina tá cara. Por isso eu ando: faz bem pro coração e melhor ainda pro bolso.',
+];
 function frasePronta(nome, texto, tipo) {
   const n = limpaNome(nome); const t = (texto || '').toLowerCase();
+  if (tipo === 'monologo') return sorteia(MONOLOGOS.filter(m => !sessao.monologos.includes(m)).length ? MONOLOGOS.filter(m => !sessao.monologos.includes(m)) : MONOLOGOS);
   if (tipo === 'presente') return sorteia([`Ô ${n}, obrigado! Presente bom é esse: alegria sem aparecer na fatura!`, `${n}, valeu! Vou guardar esse carinho junto com meus cupons de desconto.`, `Obrigado, ${n}! Agora posso economizar o dinheiro que eu ia gastar agradecendo.`]);
   if (tipo === 'chegada') return sorteia([`Chegou o ${n}! Entra, mas apaga a luz do corredor pra gente economizar.`, `Bem-vindo, ${n}! Puxa uma cadeira; é de graça e já estava aqui.`, `Olha o ${n} aí! Senta na calçada, que o aluguel desse pedaço já está pago.`]);
   if (/\b(oi|ola|olá|eae|e ai|e aí|salve|fala)\b/.test(t)) return sorteia([`Oi, ${n}! Chega mais; conversa boa não gasta energia.`, `Salve, ${n}! Tudo em paz? Espero que sem boleto surpresa.`, `E aí, ${n}! Fica à vontade, só não deixa a torneira aberta.`]);
@@ -132,7 +151,7 @@ async function vozFish(texto, voz) {
 }
 
 // ---------------- fila de falas
-const sessao = { voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map() };
+const sessao = { voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // mantém a fila curta e atual: guarda presentes e os 5 comentários mais novos
@@ -153,13 +172,22 @@ async function processa() {
     if (!buf) qual = 'navegador';
     let audio = null;
     if (buf) { const id = randomUUID(); audios.set(id, { buf, t: Date.now() }); audio = '/audio/' + id; }
-    sessao.pendentes++;
+    sessao.pendentes++; sessao.ultimaFala = Date.now();
+    if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
     io.emit('fala', { id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
   sessao.ocupado = false;
   processa();
 }
+// fala sozinho quando o chat fica quieto
+setInterval(() => {
+  if (!MONOLOGO_SEG || !io.engine.clientsCount) return;
+  if (sessao.ocupado || sessao.fila.length || sessao.pendentes) return;
+  if (Date.now() - sessao.ultimaFala < MONOLOGO_SEG * 1000) return;
+  sessao.ultimaFala = Date.now();
+  enfileira({ tipo: 'monologo', nome: '', foto: '', texto: sorteia(TEMAS) });
+}, 5000);
 setInterval(() => { if (sessao.pendentes > 0 && Date.now() - (sessao.ultimoTocou || 0) > 45000) { sessao.pendentes = 0; processa(); } }, 10000);
 
 function foto(u) {

@@ -355,7 +355,8 @@ async function tocarProxima() {
   bPerg.textContent = f.pergunta || (f.tipo === 'chegada' ? 'chegou na live 👋' : '');
   bPerg.style.display = bPerg.textContent ? 'block' : 'none';
   bResp.textContent = '';
-  balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra');
+  const comBalao = f.tipo !== 'monologo'; // falando sozinho: só a voz, sem balão
+  if (comBalao) { balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra'); }
   tio.falando = true; camForce = tio.estado === 'danca' ? null : 'frente';
   const texto = f.resposta;
   let dur = Math.max(2.5, texto.length / 14);
@@ -402,9 +403,11 @@ async function tocarProxima() {
   await Promise.race([Promise.all([done, minimo]), limite]);
   bResp.textContent = texto;
   await new Promise(r => setTimeout(r, 1400));
-  balao.classList.remove('entra'); balao.classList.add('sai');
-  await new Promise(r => setTimeout(r, 350));
-  balao.style.display = 'none';
+  if (comBalao) {
+    balao.classList.remove('entra'); balao.classList.add('sai');
+    await new Promise(r => setTimeout(r, 350));
+    balao.style.display = 'none';
+  }
   tio.falando = false; camForce = null; camTroca = performance.now() + 4000;
   if (f.onDone) f.onDone();
   tocando = false;
