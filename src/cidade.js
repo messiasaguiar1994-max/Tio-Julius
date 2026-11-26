@@ -13,12 +13,13 @@ const rr = (a, b) => a + rnd() * (b - a);
 
 // ---------- texturas desenhadas em canvas
 function canvasTex(w, h, draw, repeat = true) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const g = c.getContext('2d'); draw(g, w, h);
+  const R = (w * h <= 256 * 256) ? 2 : 1; // texturas pequenas em dobro de resolução (mais nítidas)
+  const c = document.createElement('canvas'); c.width = w * R; c.height = h * R;
+  const g = c.getContext('2d'); g.scale(R, R); draw(g, w, h);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
 }
 function noise(g, w, h, amt, n = 900) {
@@ -174,11 +175,11 @@ export function buildCity(scene) {
   // céu fim de tarde
   const sky = canvasTex(4, 512, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h);
-    gr.addColorStop(0, '#24205a'); gr.addColorStop(.45, '#7d4f8f'); gr.addColorStop(.72, '#f08a5d'); gr.addColorStop(.86, '#ffc47a'); gr.addColorStop(1, '#ffd9a0');
+    gr.addColorStop(0, '#3a4f9a'); gr.addColorStop(.45, '#9a78b8'); gr.addColorStop(.72, '#f6a473'); gr.addColorStop(.86, '#ffd08f'); gr.addColorStop(1, '#ffe3b5');
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   }, false);
   scene.background = sky;
-  scene.fog = new THREE.Fog(0xe7a47a, 28, 115);
+  scene.fog = new THREE.Fog(0xf0bb92, 32, 120);
 
   // chão (asfalto)
   const asph = asphaltTex(); asph.repeat.set(60, 60);

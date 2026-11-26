@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildCity, buildCars, nodePos, N, P, STREET, rnd, glowTex } from './cidade.js';
 
 // ---------------- configuração (URL > localStorage)
@@ -14,7 +15,7 @@ const CFG = {
 };
 
 // ---------------- render
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 let escala = 1; renderer.setPixelRatio(escala);
 // tela sempre vertical 9:16 (TikTok), centralizada; o resto fica preto
 const palco = document.getElementById('palco');
@@ -27,14 +28,18 @@ function medePalco() {
 medePalco();
 renderer.setSize(SW, SH);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
 document.getElementById('cena').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 9 / 16, .1, 130);
 addEventListener('resize', () => { medePalco(); renderer.setSize(SW, SH); bw = 0; });
 
-scene.add(new THREE.HemisphereLight(0xffd9b0, 0x5a4a5a, 1.6));
-const sun = new THREE.DirectionalLight(0xffb070, 2.2); sun.position.set(-60, 45, -30); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xffe6c8, 0x5f5562, 1.75));
+const sun = new THREE.DirectionalLight(0xffc28a, 2.6); sun.position.set(-60, 45, -30); scene.add(sun);
+// luz suave vinda da câmera: ilumina o rosto e a roupa dele (fica sempre de frente)
+const luzFrente = new THREE.DirectionalLight(0xfff1e0, 1.0); scene.add(luzFrente); scene.add(luzFrente.target);
+// reflexos suaves no personagem (deixa pele e tecido com mais volume)
+{ const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; scene.environmentIntensity = .3; pm.dispose(); }
 
 const city = buildCity(scene);
 
@@ -73,7 +78,7 @@ const tio = { obj: null, mixer: null, acts: {}, pos: new THREE.Vector3(), yaw: 0
 let pronto = false;
 new GLTFLoader().load(window.MODELO || 'models/tio.glb', (g) => {
   const root = g.scene;
-  root.traverse(o => { if (o.isMesh) { o.frustumCulled = false; if (o.material) { o.material.metalness = 0; o.material.roughness = .85; } } if (o.isBone && /Head$/.test(o.name)) tio.cabeca = o; });
+  root.traverse(o => { if (o.isMesh) { o.frustumCulled = false; if (o.material) { o.material.metalness = 0; o.material.roughness = .72; } } if (o.isBone && /Head$/.test(o.name)) tio.cabeca = o; });
   // escala para 1,78 m
   root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(root, true);
@@ -101,6 +106,7 @@ new GLTFLoader().load(window.MODELO || 'models/tio.glb', (g) => {
   const p0 = tio.walker.pts.shift(); tio.pos.set(p0.x, .16, p0.y);
   const p1 = tio.walker.pts[0]; tio.yaw = Math.atan2(p1.x - p0.x, p1.y - p0.y);
   pronto = true;
+  { const [cp, cl] = alvoCamera('frente'); camPos.copy(cp); camLook.copy(cl); }
   document.getElementById('carregando').style.display = 'none';
 });
 
@@ -475,12 +481,12 @@ function loop() {
     puffGeo.attributes.position.needsUpdate = true; puffGeo.attributes.color.needsUpdate = true;
 
     // câmera
-    if (now > camTroca && !camForce) { camIdx = (camIdx + 1) % camModos.length; camTroca = now + 9000 + rnd() * 6000; }
-    const modo = tio.estado === 'danca' ? 'danca' : (camForce || camModos[camIdx]);
+    const modo = 'frente'; // câmera sempre de frente para ele (andando, virando, dançando)
     const [cp, cl] = alvoCamera(modo);
-    const k = 1 - Math.exp(-dt * 2.2);
+    const k = 1 - Math.exp(-dt * 1.8);
     camPos.lerp(cp, k); naRua(camPos); camLook.lerp(cl, 1 - Math.exp(-dt * 4));
     camera.position.copy(camPos); camera.lookAt(camLook);
+    luzFrente.position.copy(camPos); luzFrente.position.y += 2.5; luzFrente.target.position.copy(tio.pos);
   }
   renderer.render(scene, camera);
   posicionaBalao();
