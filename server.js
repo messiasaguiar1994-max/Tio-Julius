@@ -178,7 +178,7 @@ async function conectar(usuario) {
   if (live && liveUser === usuario) return;
   try { live?.disconnect(); } catch { }
   liveUser = usuario;
-  const opts = { processInitialData: false, enableExtendedGiftInfo: true };
+  const opts = { processInitialData: false };
   if (EULER_API_KEY) opts.signApiKey = EULER_API_KEY;
   live = new TikTokLiveConnection(usuario, opts);
   live.on(WebcastEvent.CHAT, (d) => {
@@ -190,7 +190,7 @@ async function conectar(usuario) {
   live.on(WebcastEvent.GIFT, (d) => {
     if (d.giftType === 1 && !d.repeatEnd) return; // sequência ainda em andamento
     const nome = d.user?.uniqueId || 'amigo';
-    const giftName = d.extendedGiftInfo?.name || d.giftDetails?.giftName || 'presente';
+    const giftName = d.giftDetails?.giftName || d.extendedGiftInfo?.name || 'presente';
     io.emit('presente', { nome });
     enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName }, true);
   });
