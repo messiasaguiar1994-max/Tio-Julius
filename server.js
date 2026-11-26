@@ -49,6 +49,7 @@ Regras:
 const limpaNome = (n) => (n || '').replace(/[@_.]/g, ' ').replace(/\d+/g, '').trim().split(/\s+/)[0]?.replace(/^./, c => c.toUpperCase()) || 'Amigo';
 
 async function respostaIA(nome, texto, tipo) {
+  if (tipo === 'monologo') return proximoMonologo(); // sem IA: não gasta crédito
   const pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
@@ -90,22 +91,76 @@ async function respostaIA(nome, texto, tipo) {
 const sorteia = (a) => a[Math.floor(Math.random() * a.length)];
 const TEMAS = ['conta de luz', 'conta de água', 'botijão de gás', 'mercado e promoções', 'roupas e sapatos velhos', 'passagem de ônibus', 'comida que sobra', 'celular e internet', 'presente de aniversário', 'consertar em vez de comprar', 'banho', 'geladeira', 'pasta de dente e sabonete', 'festa da família', 'restaurante', 'ventilador e calor', 'guardar recibos', 'carro e gasolina', 'cartão de crédito', 'feira no fim do dia'];
 const MONOLOGOS = [
-  'Sabonete pequeno não se joga fora: gruda no novo e vira um só. Economia de verdade é nos detalhes.',
-  'Pasta de dente acabou? Corta o tubo no meio. Ainda tem pra uma semana, no mínimo.',
-  'Luz acesa em cômodo vazio é dinheiro indo embora. Aqui em casa até a geladeira tem horário.',
-  'Feira boa é no fim do dia. Fruta meio amassada tem o mesmo gosto e custa metade.',
-  'Água do banho eu reaproveito pra lavar o quintal. Se a conta subir, alguém vai ter que me explicar.',
-  'Sapato com sola gasta? Um pouco de cola e paciência, e ele aguenta mais dois invernos.',
-  'Restaurante cobra até pelo guardanapo. Marmita de casa tem mais tempero e não tem taxa de serviço.',
-  'Presente bom é presente útil. Este ano todo mundo da família ganha um pacote de lâmpadas econômicas.',
-  'Ventilador ligado só quando o suor passar da testa. Antes disso é frescor natural.',
-  'Guardo todo recibo numa caixa de sapato. Nunca se sabe quando uma loja vai tentar te enganar.',
-  'Controle remoto sem pilha? Esfrega a pilha velha na mão que ela ganha mais um mês de vida.',
-  'Gasolina tá cara. Por isso eu ando: faz bem pro coração e melhor ainda pro bolso.',
+  "Sabonete pequeno não se joga fora: gruda no novo e vira um só. Economia de verdade é nos detalhes.",
+  "Pasta de dente acabou? Corta o tubo no meio. Ainda tem pra uma semana, no mínimo.",
+  "Luz acesa em cômodo vazio é dinheiro indo embora. Aqui em casa até a geladeira tem horário.",
+  "Feira boa é no fim do dia. Fruta meio amassada tem o mesmo gosto e custa a metade.",
+  "Água do banho eu reaproveito pra lavar o quintal. Se a conta subir, alguém vai ter que me explicar.",
+  "Sapato com sola gasta? Um pouco de cola e paciência, e ele aguenta mais dois invernos.",
+  "Restaurante cobra até pelo guardanapo. Marmita de casa tem mais tempero e não tem taxa de serviço.",
+  "Presente bom é presente útil. Este ano a família toda ganha lâmpada econômica.",
+  "Ventilador só quando o suor passar da testa. Antes disso é frescor natural, de graça.",
+  "Guardo todo recibo numa caixa de sapato. Nunca se sabe quando uma loja vai tentar me enganar.",
+  "Controle sem pilha? Gira a pilha velha dentro dele que ela ganha mais um mês de vida.",
+  "Gasolina tá cara, então eu ando. Faz bem pro coração e melhor ainda pro bolso.",
+  "Banho bom é banho de cinco minutos. O resto do tempo você tá só tomando banho de dinheiro.",
+  "Sacola de mercado aqui vira saco de lixo. Nada nessa casa tem uma vida só.",
+  "Pote de sorvete vazio é a melhor vasilha que existe. Só não abre achando que é sorvete.",
+  "Shampoo acabando? Coloca um pouquinho de água no frasco e chacoalha. Rende mais três lavadas.",
+  "Desligo a geladeira da tomada? Não, isso não. Mas abrir a porta pra ficar olhando, aqui é proibido.",
+  "Roupa rasgada não vai pro lixo, vai pra agulha. Remendo bem feito é quase um estilo.",
+  "Ferro de passar? Só no domingo, tudo de uma vez. Ligar ferro pra uma camisa é desperdício.",
+  "Panela de pressão é a melhor amiga do pão-duro. Feijão pronto rapidinho e o gás agradece.",
+  "Pão de ontem vira torrada, torrada vira farinha, e farinha vira empanado. Nada se perde.",
+  "Cartão de crédito é igual cachorro bravo: tem que ficar guardado e longe da mão.",
+  "Comprou no impulso, pagou com arrependimento. Eu sempre espero três dias antes de comprar qualquer coisa.",
+  "Promoção de leve três pague dois só vale se você ia precisar dos três. Senão é só gastar mais.",
+  "Lista de compras é lei. Se não tá no papel, não entra no carrinho.",
+  "Ar-condicionado? Aqui é janela aberta e um copo de água gelada. Sai bem mais barato.",
+  "Café coado duas vezes? Não recomendo, mas confesso que já fiz numa semana apertada.",
+  "Lâmpada queimada eu troco por uma de LED. Gasta menos e ainda dura mais que meu sapato.",
+  "Celular com a tela trincada ainda liga, ainda manda mensagem. Trocar pra quê?",
+  "Aniversário aqui em casa tem bolo caseiro e refrigerante de dois litros. Festa boa é a que não deixa dívida.",
+  "Carregador ligado na tomada sem o celular também gasta. Pode parecer pouco, mas pouco com pouco vira muito.",
+  "Chinelo arrebentou? Um prego bem colocado e ele volta pra ativa.",
+  "Eu conserto tudo antes de comprar novo. Fita isolante já salvou metade dessa casa.",
+  "Mercado com fome é perigo. Eu como antes de sair pra não voltar com o carrinho cheio de besteira.",
+  "Marca famosa é só a embalagem mais bonita. O de marca própria do mercado eu já testei e aprovei.",
+  "Copo descartável aqui é lavado e usado de novo. Descartável é só no nome.",
+  "Água com gás é luxo. Água da torneira bem gelada já é festa.",
+  "Cada moeda que acho no sofá vai direto pro cofrinho. Até o sofá trabalha pra mim.",
+  "Eu pago tudo em dia pra não pagar juros. Juros é o maior desperdício que existe.",
+  "Toalha de banho não precisa lavar todo dia. Você saiu do banho limpo, a toalha só secou gente limpa.",
+  "Resto de sabão em pó eu junto num pote só. No fim do mês ainda dá uma lavada inteira.",
+  "Gás acabando? Coloca o botijão de lado que sai mais um pouco. Truque de quem conhece.",
+  "Vela de aniversário eu guardo e reaproveito. Ninguém conta quantas vezes ela já foi acesa.",
+  "Ônibus cheio? Desço um ponto antes e vou andando. Caminhada é a academia mais barata do bairro.",
+  "Fazer comida em casa e levar marmita: assim sobra dinheiro até pro final do mês.",
+  "Cada real economizado é um real que trabalha pra você. Dinheiro parado no bolso não paga conta nenhuma.",
+  "Dinheiro na mão é vendaval. Por isso eu já separo o das contas assim que recebo.",
+  "Roupa de marca? Eu uso a marca mais forte que existe: a marca do tempo, que aguenta tudo.",
+  "Tampa de garrafa vira peça de jogo, pote vira vaso, caixa vira gaveta. Aqui tudo tem segunda chance.",
+  "Delivery cobra taxa, gorjeta e ainda chega frio. A cozinha de casa entrega quentinho e de graça.",
+  "Torneira pingando é dinheiro escorrendo. Primeira coisa que eu conserto em qualquer casa.",
+  "Eletrodoméstico ligado em stand-by tem luzinha acesa. E luzinha acesa, meu amigo, é conta chegando.",
+  "Comprar na feira do bairro, conversar com o feirante e ainda ganhar um chorinho. Isso é economia com amizade.",
+  "Banana madura demais vira bolo. Nada nessa casa vai pro lixo sem antes tentar virar sobremesa.",
+  "Papel de presente eu abro com cuidado pra usar de novo. Ninguém percebe e o presente fica lindo igual.",
+  "Eu não sou pão-duro, sou organizado. A diferença é que o organizado sorri no fim do mês.",
+  "Desconto de cinco centavos também é desconto. Junta cinco aqui, cinco ali, e no fim do ano é uma pizza.",
+  "Lavar a louça com a torneira aberta o tempo todo? Aqui é bacia com água e sabão, igual antigamente.",
+  "Calça jeans boa dura dez anos. Se rasgar no joelho, vira moda e eu nem gastei.",
+  "Remédio caseiro, chá de boldo e uma boa noite de sono. Mas, se precisar, vai ao médico, hein? Saúde não é lugar de economizar.",
 ];
+// baralho: embaralha tudo e só repete depois de usar todas
+let baralho = [];
+function proximoMonologo() {
+  if (!baralho.length) { baralho = [...MONOLOGOS]; for (let i = baralho.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [baralho[i], baralho[k]] = [baralho[k], baralho[i]]; } }
+  return baralho.pop();
+}
 function frasePronta(nome, texto, tipo) {
   const n = limpaNome(nome); const t = (texto || '').toLowerCase();
-  if (tipo === 'monologo') return sorteia(MONOLOGOS.filter(m => !sessao.monologos.includes(m)).length ? MONOLOGOS.filter(m => !sessao.monologos.includes(m)) : MONOLOGOS);
+  if (tipo === 'monologo') return proximoMonologo();
   if (tipo === 'presente') return sorteia([`Ô ${n}, obrigado! Presente bom é esse: alegria sem aparecer na fatura!`, `${n}, valeu! Vou guardar esse carinho junto com meus cupons de desconto.`, `Obrigado, ${n}! Agora posso economizar o dinheiro que eu ia gastar agradecendo.`]);
   if (tipo === 'chegada') return sorteia([`Chegou o ${n}! Entra, mas apaga a luz do corredor pra gente economizar.`, `Bem-vindo, ${n}! Puxa uma cadeira; é de graça e já estava aqui.`, `Olha o ${n} aí! Senta na calçada, que o aluguel desse pedaço já está pago.`]);
   if (/\b(oi|ola|olá|eae|e ai|e aí|salve|fala)\b/.test(t)) return sorteia([`Oi, ${n}! Chega mais; conversa boa não gasta energia.`, `Salve, ${n}! Tudo em paz? Espero que sem boleto surpresa.`, `E aí, ${n}! Fica à vontade, só não deixa a torneira aberta.`]);
@@ -151,6 +206,7 @@ async function vozFish(texto, voz) {
 }
 
 // ---------------- fila de falas
+const cacheVoz = new Map(); // áudio das frases prontas, para não chamar o Fish de novo
 const sessao = { voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
@@ -167,7 +223,10 @@ async function processa() {
   const it = sessao.fila.shift();
   try {
     const resposta = (await respostaIA(it.nome, it.texto, it.tipo)).replace(/\s+/g, ' ').slice(0, 260);
-    let qual = 'fish'; let buf = await vozFish(resposta, sessao.voz);
+    let qual = 'fish', buf = null;
+    const chaveCache = sessao.voz + '|' + resposta;
+    if (it.tipo === 'monologo' && cacheVoz.has(chaveCache)) { buf = cacheVoz.get(chaveCache); qual = 'fish (guardado)'; }
+    if (!buf) { buf = await vozFish(resposta, sessao.voz); if (buf && it.tipo === 'monologo') cacheVoz.set(chaveCache, buf); }
     if (!buf) { qual = 'microsoft'; buf = await vozEdge(resposta); }
     if (!buf) qual = 'navegador';
     let audio = null;
