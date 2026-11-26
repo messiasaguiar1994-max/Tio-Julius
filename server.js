@@ -84,7 +84,7 @@ Regras:
 
 const limpaNome = (n) => (n || '').replace(/[@_.]/g, ' ').replace(/\d+/g, '').trim().split(/\s+/)[0]?.replace(/^./, c => c.toUpperCase()) || 'Amigo';
 
-async function respostaIA(nome, texto, tipo) {
+async function respostaIA(nome, texto, tipo, it = {}) {
   if (tipo === 'monologo') return proximoMonologo(); // sem IA: não gasta crédito
   const pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
@@ -92,7 +92,13 @@ async function respostaIA(nome, texto, tipo) {
     ? `${limpaNome(nome)} mandou um presente (${texto}). Agradeça emocionado, numa frase só, tratando o presente como um tesouro que vai guardar no cofre (junto com os recibos, ou até o aniversário de 100 anos). NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes.`
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
-      : `Comentário de ${limpaNome(nome)}: "${texto}"`;
+      : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
+        ? ' (Agora você VAI dançar para essa pessoa: responda topando, animado, numa frase só, e diga que é especialmente pra ela.)'
+        : it.pedidoDanca
+          ? (it.dancouAgora
+            ? ' (Você acabou de dançar faz pouco tempo: diga que precisa recuperar o fôlego e economizar a sola do sapato, e que daqui a pouco dança de novo. NUNCA mencione presentes.)'
+            : ' (Você NÃO vai dançar agora: dê uma desculpa no seu jeito aflito, ligada a cansaço, sola de sapato gasta ou contas. NUNCA mencione presentes, rosas ou o que a pessoa poderia fazer para você dançar.)')
+          : '');
   if (OPENAI_API_KEY) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
       try {
@@ -206,7 +212,7 @@ function frasePronta(nome, texto, tipo) {
   if (/(bom dia|boa tarde|boa noite)/.test(t)) return `${t.match(/(bom dia|boa tarde|boa noite)/)[1].replace(/^./, c => c.toUpperCase())}, ${n}! Que Deus abençoe seu dia.`;
   if (/(tudo bem|como vai|como (o senhor|você|vc) (ta|tá|está|esta))/.test(t)) return sorteia([`Agora tô bem, ${n}: paguei a conta de luz que tava arrancando meus cabelos. Pera aí, já sou careca... tava tirando meu sono, então.`, `Ai, ${n}, tô levando... O boleto vence semana que vem e eu já tô contando os dias de nervoso.`]);
   if (/(onde|aonde).*(vai|indo)/.test(t)) return sorteia([`Tô indo trabalhar, ${n}. Parado eu não ganho; gastando eu perco!`, `Vou à padaria, ${n}, mas já fiz a conta: hoje o pão vai ter que valer cada centavo.`]);
-  if (/(danç|danc)/.test(t)) return `Dançar, ${n}? Daqui a pouco o tio mostra quem manda na pista!`;
+  if (/(danç|danc)/.test(t)) return sorteia([`Dançar, ${n}? Ai, minha sola de sapato já tá por um fio... se gastar mais, vou ter que comprar outro.`, `Ai, ${n}, hoje não dá... trabalhei o dia inteiro, meu joelho tá cobrando juros.`]);
   if (/(idade|anos você|quantos anos)/.test(t)) return `Idade é segredo, ${n}. Só digo que tenho mais experiência que todo mundo aqui.`;
   if (/(macacão|roupa|bonito|bonita|vestindo)/.test(t)) return `Valeu, ${n}! Esse macacão dura tanto que já se pagou umas três vezes.`;
   if (/(comida|comer|almo[cç]o|jantar|favorita)/.test(t)) return `Arroz e feijão, ${n}. Enchem o prato e não esvaziam a carteira.`;
@@ -254,7 +260,7 @@ async function vozFish(texto, voz) {
 
 // ---------------- fila de falas
 const cacheVoz = new Map(); // áudio das frases prontas, para não chamar o Fish de novo
-const sessao = { voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { creditos: new Map(), ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // mantém a fila curta e atual: guarda presentes e os 5 comentários mais novos
@@ -269,7 +275,7 @@ async function processa() {
   sessao.ocupado = true;
   const it = sessao.fila.shift();
   try {
-    const resposta = (await respostaIA(it.nome, it.texto, it.tipo)).replace(/\s+/g, ' ').slice(0, 360);
+    const resposta = (await respostaIA(it.nome, it.texto, it.tipo, it)).replace(/\s+/g, ' ').slice(0, 360);
     let qual = 'fish', buf = null;
     const chaveCache = sessao.voz + '|' + resposta;
     if (it.tipo === 'monologo' && cacheVoz.has(chaveCache)) { buf = cacheVoz.get(chaveCache); qual = 'fish (guardado)'; }
@@ -281,7 +287,7 @@ async function processa() {
     sessao.pendentes++; sessao.ultimaFala = Date.now();
     if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
-    io.emit('fala', { id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
+    io.emit('fala', { danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
   sessao.ocupado = false;
   processa();
@@ -298,6 +304,20 @@ setInterval(() => { if (sessao.pendentes > 0 && Date.now() - (sessao.ultimoTocou
 
 function foto(u) {
   return u?.profilePicture?.url?.[0] || u?.profilePicture?.urls?.[0] || u?.avatarThumb?.urlList?.[0] || u?.avatarThumb?.url?.[0] || u?.avatarMedium?.urlList?.[0] || u?.avatarLarge?.urlList?.[0] || u?.profilePictureUrl || '';
+}
+// pedido de dança: só quem mandou presente nos últimos 15 min, uma vez por presente, e com intervalo entre danças
+const INTERVALO_DANCA = 90e3;
+function itemComentario(nome, fotoUrl, texto) {
+  const it = { tipo: 'comentario', nome, foto: fotoUrl, texto };
+  if (/dan[cç]|dance|rebola|requebra/i.test(texto)) {
+    it.pedidoDanca = true;
+    const c = sessao.creditos.get(nome);
+    const valido = c && c.n > 0 && Date.now() - c.t < 15 * 60e3;
+    if (valido && Date.now() - sessao.ultimaDanca > INTERVALO_DANCA) { it.danca = true; c.n--; sessao.ultimaDanca = Date.now(); }
+    else if (valido) it.dancouAgora = true;
+    console.log('Pedido de dança:', nome, it.danca ? '→ vai dançar' : valido ? '→ dançou há pouco' : '→ sem presente, só desculpa');
+  }
+  return it;
 }
 function nomeDe(d) {
   const u = d.user || {};
@@ -328,7 +348,7 @@ async function conectar(usuario) {
     const texto = (d.content ?? d.comment ?? '').trim();
     console.log('Comentário:', nome, '→', texto);
     if (!comentarioOk(nome, texto)) { console.log('  (ignorado: repetido, link ou só emoji)'); return; }
-    enfileira({ tipo: 'comentario', nome, foto: foto(d.user), texto });
+    enfileira(itemComentario(nome, foto(d.user), texto));
   });
   live.on(WebcastEvent.GIFT, (d) => {
     const tipoP = d.giftType ?? d.giftDetails?.giftType ?? d.gift?.type;
@@ -336,7 +356,7 @@ async function conectar(usuario) {
     const nome = nomeDe(d);
     const giftName = d.giftDetails?.giftName || d.gift?.name || d.extendedGiftInfo?.name || 'presente';
     console.log('Presente:', nome, '→', giftName);
-    io.emit('presente', { nome });
+    sessao.creditos.set(nome, { n: Math.min(3, (sessao.creditos.get(nome)?.n || 0) + 1), t: Date.now() }); // 1 dança por presente (máx. 3 guardadas)
     enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName }, true);
   });
   live.on(WebcastEvent.MEMBER, (d) => {
@@ -372,7 +392,7 @@ io.on('connection', (s) => {
     if (!teste) { clearInterval(testeTimer); testeTimer = null; sessao.fila = sessao.fila.filter(i => !TESTE.some(([n]) => n === i.nome)); }
     if (teste) {
       clearInterval(testeTimer);
-      const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira({ tipo: 'comentario', nome: n, foto: '', texto: t }); if (n === 'carlos.ff') io.emit('presente', { nome: n }); };
+      const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira(itemComentario(n, '', t));  };
       setTimeout(tick, 2000); testeTimer = setInterval(tick, 15000);
     } else if (usuario) conectar(usuario.replace(/^@/, '').trim());
   });

@@ -345,7 +345,7 @@ async function amplifica() {
   } catch (e) { relata('amplificador falhou: ' + e.message); }
 }
 function relata(t) { console.warn(t); try { window.__sock && window.__sock.emit('log', t); } catch { } }
-export function receberFala(f) { fila.push(f); if (f.tipo === 'presente') dancar(7); tocarProxima(); }
+export function receberFala(f) { fila.push(f); tocarProxima(); }
 async function tocarProxima() {
   if (tocando || !fila.length) return;
   tocando = true;
@@ -355,6 +355,7 @@ async function tocarProxima() {
   bPerg.textContent = f.pergunta || (f.tipo === 'chegada' ? 'chegou na live 👋' : '');
   bPerg.style.display = bPerg.textContent ? 'block' : 'none';
   bResp.textContent = '';
+  if (f.danca) dancar(9); // dança só quando o servidor libera (quem mandou presente pediu)
   const comBalao = f.tipo !== 'monologo'; // falando sozinho: só a voz, sem balão
   if (comBalao) { balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra'); }
   tio.falando = true; camForce = tio.estado === 'danca' ? null : 'frente';
@@ -434,7 +435,6 @@ function loop() {
       const VEL = tio.passo || 1.5, v = VEL * (1 - Math.min(.5, Math.abs(dy) / 2));
       tio.pos.x += Math.sin(tio.yaw) * v * dt; tio.pos.z += Math.cos(tio.yaw) * v * dt;
       tio.acts.andar.timeScale = v / VEL;
-      if (now > danceTimer && !tio.falando) { dancar(6); danceTimer = now + 100000 + rnd() * 60000; }
     } else if (tio.estado === 'danca' && now > tio.fimDanca) {
       tio.estado = 'andar'; trocar('andar', .5);
     }
@@ -511,7 +511,6 @@ let demoK = 0;
 function demoTick() {
   const [nome, perg, resp] = DEMO[demoK++ % DEMO.length];
   receberFala({ nome, pergunta: perg, resposta: resp, tipo: 'comentario' });
-  if (nome === 'carlos.ff') dancar(6);
 }
 
 export function iniciar(cfg) {
@@ -527,7 +526,6 @@ export function iniciar(cfg) {
   sock.on('connect', () => { sock.emit('iniciar', { usuario: CFG.usuario, voz: CFG.voz, teste: CFG.modoTeste }); });
   sock.on('status', (s) => setStatus(s.texto, s.ok));
   sock.on('fala', (f) => { f.onDone = () => sock.emit('tocou', f.id); receberFala(f); });
-  sock.on('presente', () => dancar(7));
   sock.on('disconnect', () => setStatus('Servidor desconectado, tentando de novo…'));
   window.__sock = sock;
 }
