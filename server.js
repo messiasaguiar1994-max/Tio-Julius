@@ -148,11 +148,13 @@ async function processa() {
   const it = sessao.fila.shift();
   try {
     const resposta = (await respostaIA(it.nome, it.texto, it.tipo)).replace(/\s+/g, ' ').slice(0, 260);
-    const buf = (await vozFish(resposta, sessao.voz)) || (await vozEdge(resposta));
+    let qual = 'fish'; let buf = await vozFish(resposta, sessao.voz);
+    if (!buf) { qual = 'microsoft'; buf = await vozEdge(resposta); }
+    if (!buf) qual = 'navegador';
     let audio = null;
     if (buf) { const id = randomUUID(); audios.set(id, { buf, t: Date.now() }); audio = '/audio/' + id; }
     sessao.pendentes++;
-    console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', buf ? (sessao.voz && FISH_API_KEY ? 'fish/ms' : 'microsoft') : 'navegador', '| telas abertas:', io.engine.clientsCount);
+    console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
     io.emit('fala', { id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
   sessao.ocupado = false;
@@ -162,6 +164,10 @@ setInterval(() => { if (sessao.pendentes > 0 && Date.now() - (sessao.ultimoTocou
 
 function foto(u) {
   return u?.profilePicture?.url?.[0] || u?.profilePicture?.urls?.[0] || u?.avatarThumb?.urlList?.[0] || u?.avatarThumb?.url?.[0] || u?.avatarMedium?.urlList?.[0] || u?.avatarLarge?.urlList?.[0] || u?.profilePictureUrl || '';
+}
+function nomeDe(d) {
+  const u = d.user || {};
+  return u.nickname || u.displayId || u.uniqueId || d.nickname || d.uniqueId || '';
 }
 function comentarioOk(nome, texto) {
   if (!texto || texto.length < 2) return false;
@@ -184,23 +190,25 @@ async function conectar(usuario) {
   if (EULER_API_KEY) opts.signApiKey = EULER_API_KEY;
   live = new TikTokLiveConnection(usuario, opts);
   live.on(WebcastEvent.CHAT, (d) => {
-    const nome = d.user?.uniqueId || d.user?.nickname || 'amigo';
-    const texto = (d.comment || '').trim();
+    const nome = nomeDe(d);
+    const texto = (d.content ?? d.comment ?? '').trim();
     console.log('Comentário:', nome, '→', texto);
     if (!comentarioOk(nome, texto)) { console.log('  (ignorado: repetido, link ou só emoji)'); return; }
     enfileira({ tipo: 'comentario', nome, foto: foto(d.user), texto });
   });
   live.on(WebcastEvent.GIFT, (d) => {
-    if (d.giftType === 1 && !d.repeatEnd) return; // sequência ainda em andamento
-    const nome = d.user?.uniqueId || 'amigo';
-    const giftName = d.giftDetails?.giftName || d.extendedGiftInfo?.name || 'presente';
+    const tipoP = d.giftType ?? d.giftDetails?.giftType ?? d.gift?.type;
+    if (tipoP === 1 && !d.repeatEnd) return; // sequência ainda em andamento
+    const nome = nomeDe(d);
+    const giftName = d.giftDetails?.giftName || d.gift?.name || d.extendedGiftInfo?.name || 'presente';
+    console.log('Presente:', nome, '→', giftName);
     io.emit('presente', { nome });
     enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName }, true);
   });
   live.on(WebcastEvent.MEMBER, (d) => {
     if (Date.now() - sessao.ultimaChegada < 60000 || sessao.fila.length) return;
+    const nome = nomeDe(d); if (!nome) return;
     sessao.ultimaChegada = Date.now();
-    const nome = d.user?.uniqueId || 'amigo';
     enfileira({ tipo: 'chegada', nome, foto: foto(d.user), texto: '' });
   });
   live.on(ControlEvent.DISCONNECTED, () => { io.emit('status', { texto: 'Live desconectada. Tentando de novo em 20 s…' }); setTimeout(() => { const u = liveUser; live = null; liveUser = ''; conectar(u); }, 20000); });
