@@ -335,6 +335,24 @@ function posicionaBalao() {
 // fila de falas
 const fila = []; let tocando = false;
 const audioEl = new Audio(); let actx = null;
+audioEl.crossOrigin = 'anonymous';
+// amplificador da voz: ?volume=2 (padrão) — 1 = normal, 3 = bem alto
+const GANHO = Math.max(.2, Math.min(5, parseFloat(qs.get('volume') || '2.2')));
+let amplificado = false;
+async function amplifica() {
+  if (amplificado) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state !== 'running') { try { await Promise.race([actx.resume(), new Promise(r => setTimeout(r, 300))]); } catch { } }
+    if (actx.state !== 'running') return; // sem permissão de áudio: toca normal, sem amplificar
+    amplificado = true;
+    const src = actx.createMediaElementSource(audioEl);
+    const g = actx.createGain(); g.gain.value = GANHO;
+    const comp = actx.createDynamicsCompressor(); // segura os picos para não estourar
+    comp.threshold.value = -10; comp.knee.value = 6; comp.ratio.value = 8; comp.attack.value = .003; comp.release.value = .15;
+    src.connect(g); g.connect(comp); comp.connect(actx.destination);
+  } catch (e) { relata('amplificador falhou: ' + e.message); }
+}
 function relata(t) { console.warn(t); try { window.__sock && window.__sock.emit('log', t); } catch { } }
 export function receberFala(f) { fila.push(f); if (f.tipo === 'presente') dancar(7); tocarProxima(); }
 async function tocarProxima() {
@@ -357,6 +375,7 @@ async function tocarProxima() {
     // 1º jeito: elemento de áudio
     try {
       audioEl.src = f.audio; audioEl.volume = 1;
+      await amplifica();
       await audioEl.play(); tocou = true;
       audioEl.onended = () => fim(); audioEl.onerror = () => fim();
       await new Promise(r => { if (isFinite(audioEl.duration)) r(); else audioEl.onloadedmetadata = r; setTimeout(r, 800); });
@@ -369,7 +388,7 @@ async function tocarProxima() {
         if (actx.state !== 'running') await actx.resume();
         const buf = await (await fetch(f.audio)).arrayBuffer();
         const ab = await actx.decodeAudioData(buf);
-        const src = actx.createBufferSource(); src.buffer = ab; src.connect(actx.destination);
+        const src = actx.createBufferSource(); src.buffer = ab; const g2 = actx.createGain(); g2.gain.value = GANHO; src.connect(g2); g2.connect(actx.destination);
         src.onended = () => fim(); src.start(); tocou = true; dur = ab.duration;
         relata('áudio tocado pelo 2º jeito (Web Audio), estado: ' + actx.state);
       } catch (e) { relata('áudio 2 falhou: ' + (e && (e.name + ' ' + e.message))); }
