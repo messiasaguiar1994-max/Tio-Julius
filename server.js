@@ -242,6 +242,7 @@ io.on('connection', (s) => {
       setTimeout(tick, 2000); testeTimer = setInterval(tick, 15000);
     } else if (usuario) conectar(usuario.replace(/^@/, '').trim());
   });
+  s.on('log', (t) => console.log('Tela do jogo:', String(t).slice(0, 200)));
   s.on('tocou', () => { sessao.pendentes = Math.max(0, sessao.pendentes - 1); sessao.ultimoTocou = Date.now(); processa(); });
 });
 

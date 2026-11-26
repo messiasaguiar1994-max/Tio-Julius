@@ -334,7 +334,8 @@ function posicionaBalao() {
 
 // fila de falas
 const fila = []; let tocando = false;
-const audioEl = new Audio();
+const audioEl = new Audio(); let actx = null;
+function relata(t) { console.warn(t); try { window.__sock && window.__sock.emit('log', t); } catch { } }
 export function receberFala(f) { fila.push(f); if (f.tipo === 'presente') dancar(7); tocarProxima(); }
 async function tocarProxima() {
   if (tocando || !fila.length) return;
@@ -353,14 +354,28 @@ async function tocarProxima() {
   const done = new Promise(res => fim = res);
   let tocou = false;
   if (f.audio) {
+    // 1º jeito: elemento de áudio
     try {
-      audioEl.src = f.audio; await audioEl.play(); tocou = true;
+      audioEl.src = f.audio; audioEl.volume = 1;
+      await audioEl.play(); tocou = true;
       audioEl.onended = () => fim(); audioEl.onerror = () => fim();
       await new Promise(r => { if (isFinite(audioEl.duration)) r(); else audioEl.onloadedmetadata = r; setTimeout(r, 800); });
       if (isFinite(audioEl.duration)) dur = audioEl.duration;
-    } catch (e) { console.warn('áudio', e); }
+    } catch (e) { relata('áudio 1 falhou: ' + (e && (e.name + ' ' + e.message))); }
+    // 2º jeito: Web Audio (mais compatível com o OBS)
+    if (!tocou) {
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state !== 'running') await actx.resume();
+        const buf = await (await fetch(f.audio)).arrayBuffer();
+        const ab = await actx.decodeAudioData(buf);
+        const src = actx.createBufferSource(); src.buffer = ab; src.connect(actx.destination);
+        src.onended = () => fim(); src.start(); tocou = true; dur = ab.duration;
+        relata('áudio tocado pelo 2º jeito (Web Audio), estado: ' + actx.state);
+      } catch (e) { relata('áudio 2 falhou: ' + (e && (e.name + ' ' + e.message))); }
+    }
   }
-  if (!tocou && 'speechSynthesis' in window) {
+  if (!tocou && !f.audio && 'speechSynthesis' in window) {
     const u = new SpeechSynthesisUtterance(texto); u.lang = 'pt-BR'; u.rate = 1.02; u.pitch = .8;
     const v = speechSynthesis.getVoices().find(v => /pt[-_]BR/i.test(v.lang) && /male|antonio|daniel|ricardo|homem/i.test(v.name)) || speechSynthesis.getVoices().find(v => /pt/i.test(v.lang));
     if (v) u.voice = v;
