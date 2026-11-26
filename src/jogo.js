@@ -22,7 +22,7 @@ let SW = 0, SH = 0;
 function medePalco() {
   SH = innerHeight; SW = Math.round(SH * 9 / 16);
   if (SW > innerWidth) { SW = innerWidth; SH = Math.round(SW * 16 / 9); }
-  palco.style.width = SW + 'px'; palco.style.height = SH + 'px';
+  palco.style.width = SW + 'px'; palco.style.height = SH + 'px'; palco.style.setProperty('--u', (SW / 100) + 'px');
 }
 medePalco();
 renderer.setSize(SW, SH);
@@ -31,16 +31,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure
 document.getElementById('cena').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 9 / 16, .1, 130);
-addEventListener('resize', () => { // tela sempre vertical 9:16 (TikTok), centralizada; o resto fica preto
-const palco = document.getElementById('palco');
-let SW = 0, SH = 0;
-function medePalco() {
-  SH = innerHeight; SW = Math.round(SH * 9 / 16);
-  if (SW > innerWidth) { SW = innerWidth; SH = Math.round(SW * 16 / 9); }
-  palco.style.width = SW + 'px'; palco.style.height = SH + 'px';
-}
-medePalco();
-renderer.setSize(SW, SH); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+addEventListener('resize', () => { medePalco(); renderer.setSize(SW, SH); bw = 0; });
 
 scene.add(new THREE.HemisphereLight(0xffd9b0, 0x5a4a5a, 1.6));
 const sun = new THREE.DirectionalLight(0xffb070, 2.2); sun.position.set(-60, 45, -30); scene.add(sun);
@@ -327,7 +318,7 @@ function posicionaBalao() {
   let x = (tmpV.x * .5 + .5) * SW, y = (-tmpV.y * .5 + .5) * SH - 18; // ponta do balão acima da cabeça
   if (!bw) { bw = balao.offsetWidth; bh = balao.offsetHeight; }
   x = Math.max(bw / 2 + 8, Math.min(SW - bw / 2 - 8, x));
-  y = Math.max(bh + 62, Math.min(SH * .6, y));
+  y = Math.max(bh + SH * .07, Math.min(SH * .55, y));
   x = Math.round(x - bw / 2); y = Math.round(y - bh);
   if (x !== bx || y !== by) { bx = x; by = y; balao.style.transform = `translate(${x}px, ${y}px)`; }
 }
@@ -361,8 +352,8 @@ async function tocarProxima() {
   const f = fila.shift();
   bFoto.src = f.foto || 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#f59e0b"/><text x="20" y="27" font-size="20" text-anchor="middle" fill="#fff" font-family="Arial">' + (f.nome || '?')[0].toUpperCase() + '</text></svg>');
   bNome.textContent = f.nome ? '@' + f.nome : '';
-  bPerg.textContent = f.pergunta || '';
-  bPerg.style.display = f.pergunta ? 'block' : 'none';
+  bPerg.textContent = f.pergunta || (f.tipo === 'chegada' ? 'chegou na live 👋' : '');
+  bPerg.style.display = bPerg.textContent ? 'block' : 'none';
   bResp.textContent = '';
   balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra');
   tio.falando = true; camForce = tio.estado === 'danca' ? null : 'frente';
