@@ -524,4 +524,5 @@ document.getElementById('in-user').value = CFG.usuario;
 document.getElementById('in-voz').value = CFG.voz;
 document.getElementById('btn-live').onclick = () => iniciar({ usuario: document.getElementById('in-user').value.trim().replace(/^@/, ''), voz: document.getElementById('in-voz').value.trim(), modoTeste: false });
 document.getElementById('btn-teste').onclick = () => iniciar({ usuario: document.getElementById('in-user').value.trim().replace(/^@/, ''), voz: document.getElementById('in-voz').value.trim(), modoTeste: true });
-if (CFG.auto) iniciar({ modoTeste: !CFG.usuario });
+// link automático: com ?user= conecta na live; sem ele (ou com ?teste=1) entra no modo teste
+if (CFG.auto) { const u = (qs.get('user') || '').replace(/^@/, ''); const teste = qs.get('teste') === '1' || !u; iniciar({ usuario: u, modoTeste: teste }); }
