@@ -14,16 +14,16 @@
   #grao { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(30,10,20,.55) 100%); mix-blend-mode: multiply; }
   #carregando { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #ffd38a; font-size: 22px; letter-spacing: 1px; background: #1a1220; z-index: 5; }
   /* balão: tamanhos proporcionais à largura do jogo (--u = 1% da largura) */
-  #balao { position: absolute; left: 0; top: 0; display: none; width: calc(var(--u) * 86); background: #fffaf0; border: calc(var(--u) * .9) solid #1b1b1b; border-radius: calc(var(--u) * 5); padding: calc(var(--u) * 3) calc(var(--u) * 3.6); box-shadow: calc(var(--u) * 1.2) calc(var(--u) * 1.2) 0 #1b1b1b; z-index: 3; will-change: transform; box-sizing: border-box; }
-  #balao:after { content: ''; position: absolute; left: 50%; bottom: calc(var(--u) * -5.6); margin-left: calc(var(--u) * -3); border: calc(var(--u) * 3) solid transparent; border-top: calc(var(--u) * 4) solid #1b1b1b; }
+  #balao { --b: calc(var(--u) * .6); position: absolute; left: 0; top: 0; display: none; width: calc(var(--b) * 86); background: #fffaf0; border: calc(var(--b) * .9) solid #1b1b1b; border-radius: calc(var(--b) * 5); padding: calc(var(--b) * 3) calc(var(--b) * 3.6); box-shadow: calc(var(--b) * 1.2) calc(var(--b) * 1.2) 0 #1b1b1b; z-index: 3; will-change: transform; box-sizing: border-box; }
+  #balao:after { content: ''; position: absolute; left: 50%; bottom: calc(var(--b) * -5.6); margin-left: calc(var(--b) * -3); border: calc(var(--b) * 3) solid transparent; border-top: calc(var(--b) * 4) solid #1b1b1b; }
   #balao.entra { animation: entra .35s cubic-bezier(.2,1.4,.4,1) both; }
   #balao.sai { animation: sai .3s ease-in both; }
   @keyframes entra { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
   @keyframes sai { to { opacity: 0; scale: .8; } }
-  .b-topo { display: flex; align-items: center; gap: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 2.4); }
-  #b-foto { width: calc(var(--u) * 17); height: calc(var(--u) * 17); flex: none; border-radius: 50%; border: calc(var(--u) * .8) solid #f97316; object-fit: cover; background: #f59e0b; box-shadow: 0 0 0 calc(var(--u) * .6) #1b1b1b; }
-  #b-nome { font-size: calc(var(--u) * 6.2); line-height: 1.1; color: #c2410c; word-break: break-word; }
-  #b-perg { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 700; font-size: calc(var(--u) * 5.6); line-height: 1.22; color: #1b1b1b; }
+  .b-topo { display: flex; align-items: center; gap: calc(var(--b) * 3); margin-bottom: calc(var(--b) * 2.4); }
+  #b-foto { width: calc(var(--b) * 17); height: calc(var(--b) * 17); flex: none; border-radius: 50%; border: calc(var(--b) * .8) solid #f97316; object-fit: cover; background: #f59e0b; box-shadow: 0 0 0 calc(var(--b) * .6) #1b1b1b; }
+  #b-nome { font-size: calc(var(--b) * 6.2); line-height: 1.1; color: #c2410c; word-break: break-word; }
+  #b-perg { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 700; font-size: calc(var(--b) * 5.6); line-height: 1.22; color: #1b1b1b; }
   #b-resp { display: none; }
   /* placa do bairro */
   #placa { position: absolute; top: calc(var(--u) * 2.6); left: 50%; transform: translateX(-50%); background: #0f5132; color: #fff; border: calc(var(--u) * .55) solid #fff; border-radius: calc(var(--u) * 1.2); padding: calc(var(--u) * .8) calc(var(--u) * 2.6); font-size: calc(var(--u) * 3.6); letter-spacing: 1px; box-shadow: 0 3px 0 rgba(0,0,0,.4); z-index: 2; white-space: nowrap; }
