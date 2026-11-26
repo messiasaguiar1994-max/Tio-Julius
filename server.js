@@ -142,7 +142,8 @@ function enfileira(item, prioridade = false) {
   processa();
 }
 async function processa() {
-  if (sessao.ocupado || sessao.pendentes >= 2 || !sessao.fila.length) return;
+  if (sessao.ocupado || !sessao.fila.length) return;
+  if (sessao.pendentes >= 2) { console.log('Aguardando a tela tocar as falas anteriores (pendentes:', sessao.pendentes + ')'); return; }
   sessao.ocupado = true;
   const it = sessao.fila.shift();
   try {
@@ -151,6 +152,7 @@ async function processa() {
     let audio = null;
     if (buf) { const id = randomUUID(); audios.set(id, { buf, t: Date.now() }); audio = '/audio/' + id; }
     sessao.pendentes++;
+    console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', buf ? (sessao.voz && FISH_API_KEY ? 'fish/ms' : 'microsoft') : 'navegador', '| telas abertas:', io.engine.clientsCount);
     io.emit('fala', { id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
   sessao.ocupado = false;
@@ -184,7 +186,8 @@ async function conectar(usuario) {
   live.on(WebcastEvent.CHAT, (d) => {
     const nome = d.user?.uniqueId || d.user?.nickname || 'amigo';
     const texto = (d.comment || '').trim();
-    if (!comentarioOk(nome, texto)) return;
+    console.log('Comentário:', nome, '→', texto);
+    if (!comentarioOk(nome, texto)) { console.log('  (ignorado: repetido, link ou só emoji)'); return; }
     enfileira({ tipo: 'comentario', nome, foto: foto(d.user), texto });
   });
   live.on(WebcastEvent.GIFT, (d) => {
@@ -223,6 +226,8 @@ io.on('connection', (s) => {
   s.on('iniciar', ({ usuario, voz, teste }) => {
     if (voz) sessao.voz = voz.trim();
     s.emit('status', { texto: `Voz: ${sessao.voz && FISH_API_KEY ? 'Fish Audio' : 'Microsoft (grátis)'} · Respostas: ${OPENAI_API_KEY ? 'OpenAI' : GEMINI_API_KEY ? 'Gemini' : 'frases prontas'}`, ok: true });
+    sessao.pendentes = 0;
+    if (!teste) { clearInterval(testeTimer); testeTimer = null; sessao.fila = sessao.fila.filter(i => !TESTE.some(([n]) => n === i.nome)); }
     if (teste) {
       clearInterval(testeTimer);
       const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira({ tipo: 'comentario', nome: n, foto: '', texto: t }); if (n === 'carlos.ff') io.emit('presente', { nome: n }); };
