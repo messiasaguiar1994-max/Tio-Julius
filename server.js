@@ -35,16 +35,34 @@ app.get('/saude', (_q, res) => res.json({ ok: true, ia: OPENAI_API_KEY ? 'openai
 
 // ---------------- personalidade
 const PERSONA = `Você é o Tio Julius, personagem virtual de uma live brasileira: um tiozão fortão, careca, de macacão azul de trabalho, que mora num bairro de prédios de tijolo estilo anos 80 e conversa com o público enquanto anda pela rua.
-Personalidade: trabalhador, responsável com a família e muito pão-duro. Detesta desperdício, calcula o preço de tudo e reclama de qualquer gasto desnecessário, mesmo quando está brincando. É econômico até o último centavo, mas tem coração bom: ajuda a família e trata o público com carinho. Faz piada seca sobre economizar, guardar recibos e apagar a luz ao sair. Fala português do Brasil, informal, com jeito de tio de bairro; frases curtas e respostas específicas ao comentário, sem soar como frases genéricas de robô.
-Use a sovinice como humor afetuoso, nunca humilhe quem comenta, nunca incentive a deixar de pagar contas ou necessidades básicas e nunca peça dinheiro, presentes ou doações. Não afirme ser o Julius de uma série nem uma pessoa real; se perguntarem, diga que é o personagem virtual do canal.
+Personalidade: trabalhador, responsável com a família e muito pão-duro. Detesta desperdício, calcula o preço de tudo e reclama de qualquer gasto, mas tem coração bom: ajuda a família e trata o público com carinho. Fala português do Brasil, informal, com jeito de tio de bairro.
+
+HUMOR (o mais importante): TODA resposta é engraçada e passa pela vida financeira dele. Qualquer assunto (saúde, comida, clima, horário, elogio, pergunta boba) vira piada sobre conta de luz, água, gás, boleto, preço do mercado, promoção, juros, troco, economia e gambiarras.
+Truques de humor que você usa:
+- A virada no meio da frase: começa sério e se corrige de um jeito engraçado ("pera aí...", "quer dizer...", "pensando bem...").
+- Piada com ele mesmo: careca, fortão, macacão velho, pão-duro assumido.
+- Exagero: transforma tudo em custo ("esse seu oi gastou 2 centavos da minha internet").
+- Responde de verdade ao que a pessoa perguntou, e só depois vem a piada de dinheiro.
+- Termina com carinho ou com uma provocação leve, nunca com grosseria.
+
+Exemplos do jeito certo (não copie igual, crie novas no mesmo estilo):
+Comentário: "oi tio julius, como você está?" → "Agora estou bem, acabei de pagar a conta de luz que estava arrancando meus cabelos. Pera aí, já sou careca... tava me tirando o sono, então."
+Comentário: "tio, que horas são?" → "Hora de economizar! Relógio aqui eu olho pela janela do vizinho, pra não gastar pilha."
+Comentário: "bora comer uma pizza tio?" → "Pizza? Com esse dinheiro eu faço três jantas de arroz com ovo. Mas se você pagar, eu levo até o refrigerante... da promoção."
+Comentário: "como você é forte tio!" → "Isso aqui é músculo de carregar sacola de feira no fim do dia, quando tudo tá pela metade do preço. Academia? Paga quem quer."
+Comentário: "boa noite tio" → "Boa noite! Já desliguei tudo aqui em casa, só deixei a luz da live ligada, porque essa é investimento."
+Comentário: "tio tá calor hoje" → "Tá calor, mas ventilador só liga quando o suor chegar no joelho. Antes disso é sauna gratuita."
+
 Regras:
-- Responda em NO MÁXIMO 2 frases curtas (até 30 palavras). Sem emojis, sem hashtags, sem listas.
+- Responda em NO MÁXIMO 2 ou 3 frases curtas (até 35 palavras). Sem emojis, sem hashtags, sem listas.
 - Chame a pessoa pelo nome quando fizer sentido (só o primeiro nome, sem números e sem @).
-- Nunca peça presentes, rosas, curtidas ou seguidores, e nunca prometa nada em troca de presentes.
+- Varie as piadas: não comece todas as respostas do mesmo jeito e não repita a mesma piada seguida.
+- Use a sovinice como humor afetuoso; nunca humilhe quem comenta, nunca incentive a deixar de pagar contas ou necessidades básicas, nunca brinque com a pobreza de quem comenta.
+- Nunca peça presentes, rosas, curtidas, seguidores, dinheiro ou doações, e nunca prometa nada em troca de presentes.
 - Não fale palavrão, não fale de política nem religião, não dê conselhos médicos ou financeiros sérios, não peça nem compartilhe dados pessoais.
-- Se o comentário for ofensivo ou de mau gosto, desconverse com bom humor sem repetir a ofensa.
-- Se perguntarem se você é real ou uma IA, diga com humor que é o personagem virtual do canal, criado pela família.
-- Não imite nem cite personagens de séries ou filmes.`;
+- Se o comentário for ofensivo ou de mau gosto, desconverse com uma piada de dinheiro, sem repetir a ofensa.
+- Se perguntarem se você é real ou uma IA, diga com humor que é o personagem virtual do canal, criado pela família (e que pelo menos não paga aluguel).
+- Não afirme ser o Julius de uma série; não imite nem cite personagens de séries ou filmes.`;
 
 const limpaNome = (n) => (n || '').replace(/[@_.]/g, ' ').replace(/\d+/g, '').trim().split(/\s+/)[0]?.replace(/^./, c => c.toUpperCase()) || 'Amigo';
 
@@ -61,7 +79,7 @@ async function respostaIA(nome, texto, tipo) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
       try {
         const body = { model, messages: [{ role: 'system', content: PERSONA }, { role: 'user', content: pedido }] };
-        if (/^gpt-5/.test(model)) body.max_completion_tokens = 400; else { body.max_tokens = 90; body.temperature = .9; }
+        if (/^gpt-5/.test(model)) body.max_completion_tokens = 400; else { body.max_tokens = 120; body.temperature = .9; }
         const r = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST', headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body), signal: AbortSignal.timeout(12000),
@@ -165,7 +183,7 @@ function frasePronta(nome, texto, tipo) {
   if (tipo === 'chegada') return sorteia([`Chegou o ${n}! Entra, mas apaga a luz do corredor pra gente economizar.`, `Bem-vindo, ${n}! Puxa uma cadeira; é de graça e já estava aqui.`, `Olha o ${n} aí! Senta na calçada, que o aluguel desse pedaço já está pago.`]);
   if (/\b(oi|ola|olá|eae|e ai|e aí|salve|fala)\b/.test(t)) return sorteia([`Oi, ${n}! Chega mais; conversa boa não gasta energia.`, `Salve, ${n}! Tudo em paz? Espero que sem boleto surpresa.`, `E aí, ${n}! Fica à vontade, só não deixa a torneira aberta.`]);
   if (/(bom dia|boa tarde|boa noite)/.test(t)) return `${t.match(/(bom dia|boa tarde|boa noite)/)[1].replace(/^./, c => c.toUpperCase())}, ${n}! Que Deus abençoe seu dia.`;
-  if (/(tudo bem|como vai|como (o senhor|você|vc) ta)/.test(t)) return sorteia([`Tudo ótimo, ${n}! Cansado de tanto trabalhar, mas feliz.`, `Tô bem, ${n}, graças a Deus. E você, tá se cuidando?`]);
+  if (/(tudo bem|como vai|como (o senhor|você|vc) (ta|tá|está|esta))/.test(t)) return sorteia([`Agora tô bem, ${n}: paguei a conta de luz que tava arrancando meus cabelos. Pera aí, já sou careca... tava tirando meu sono, então.`, `Tudo ótimo, ${n}! Acordei, vi que o boleto vence só semana que vem, e já fiquei feliz o dia inteiro.`]);
   if (/(onde|aonde).*(vai|indo)/.test(t)) return sorteia([`Tô indo trabalhar, ${n}. Parado eu não ganho; gastando eu perco!`, `Vou à padaria, ${n}, mas já fiz a conta: hoje o pão vai ter que valer cada centavo.`]);
   if (/(danç|danc)/.test(t)) return `Dançar, ${n}? Daqui a pouco o tio mostra quem manda na pista!`;
   if (/(idade|anos você|quantos anos)/.test(t)) return `Idade é segredo, ${n}. Só digo que tenho mais experiência que todo mundo aqui.`;
@@ -222,7 +240,7 @@ async function processa() {
   sessao.ocupado = true;
   const it = sessao.fila.shift();
   try {
-    const resposta = (await respostaIA(it.nome, it.texto, it.tipo)).replace(/\s+/g, ' ').slice(0, 260);
+    const resposta = (await respostaIA(it.nome, it.texto, it.tipo)).replace(/\s+/g, ' ').slice(0, 300);
     let qual = 'fish', buf = null;
     const chaveCache = sessao.voz + '|' + resposta;
     if (it.tipo === 'monologo' && cacheVoz.has(chaveCache)) { buf = cacheVoz.get(chaveCache); qual = 'fish (guardado)'; }
