@@ -6,12 +6,15 @@
 <link rel="icon" href="data:,">
 <title>Tio Julius no Bairro</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1220; font-family: 'Arial Black', 'Segoe UI', Arial, sans-serif; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000;
+  }
+  #palco { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden; background: #1a1220; }
+  body { font-family: 'Arial Black', 'Segoe UI', Arial, sans-serif; }
   #cena canvas { display: block; }
-  #grao { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(30,10,20,.55) 100%); mix-blend-mode: multiply; }
+  #grao { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(30,10,20,.55) 100%); mix-blend-mode: multiply; }
   #carregando { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #ffd38a; font-size: 22px; letter-spacing: 1px; background: #1a1220; z-index: 5; }
   /* balão */
-  #balao { position: fixed; left: 0; top: 0; display: none; width: min(64vw, 320px); background: #fffaf0; border: 3px solid #1b1b1b; border-radius: 16px; padding: 7px 11px 9px; box-shadow: 4px 4px 0 #1b1b1b; z-index: 3; will-change: transform; }
+  #balao { position: absolute; left: 0; top: 0; display: none; width: 74%; max-width: 320px; background: #fffaf0; border: 3px solid #1b1b1b; border-radius: 16px; padding: 7px 11px 9px; box-shadow: 4px 4px 0 #1b1b1b; z-index: 3; will-change: transform; }
   #balao:after { content: ''; position: absolute; left: 50%; bottom: -17px; margin-left: -10px; border: 10px solid transparent; border-top: 14px solid #1b1b1b; }
   #balao.entra { animation: entra .35s cubic-bezier(.2,1.4,.4,1) both; }
   #balao.sai { animation: sai .3s ease-in both; }
@@ -23,8 +26,8 @@
   #b-perg { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 600; font-size: 12px; color: #555; background: #f1ebde; border-radius: 8px; padding: 3px 7px; margin-bottom: 5px; }
   #b-resp { font-size: 16px; line-height: 1.22; color: #1b1b1b; min-height: 26px; }
   /* placa do bairro */
-  #placa { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #0f5132; color: #fff; border: 3px solid #fff; border-radius: 6px; padding: 4px 14px; font-size: 18px; letter-spacing: 1px; box-shadow: 0 3px 0 rgba(0,0,0,.4); z-index: 2; white-space: nowrap; }
-  #status { position: fixed; bottom: 10px; left: 10px; color: #fff; font: 600 12px Arial; background: rgba(0,0,0,.55); padding: 5px 9px; border-radius: 8px; transition: opacity 1s; z-index: 4; }
+  #placa { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: #0f5132; color: #fff; border: 3px solid #fff; border-radius: 6px; padding: 4px 14px; font-size: 18px; letter-spacing: 1px; box-shadow: 0 3px 0 rgba(0,0,0,.4); z-index: 2; white-space: nowrap; }
+  #status { position: absolute; bottom: 10px; left: 10px; color: #fff; font: 600 12px Arial; background: rgba(0,0,0,.55); padding: 5px 9px; border-radius: 8px; transition: opacity 1s; z-index: 4; }
   #status.ok { color: #86efac; }
   /* tela inicial */
   #inicio { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: linear-gradient(#24205a, #7d4f8f 55%, #f08a5d); }
@@ -40,11 +43,13 @@
 </style>
 </head>
 <body>
+<div id="palco">
 <div id="cena"></div>
 <div id="grao"></div>
 <div id="placa">BAIRRO DO TIO JULIUS</div>
 <div id="balao"><div class="b-topo"><img id="b-foto" alt=""><span id="b-nome"></span></div><div id="b-perg"></div><div id="b-resp"></div></div>
 <div id="status"></div>
+</div>
 <div id="carregando">Carregando o bairro…</div>
 <div id="inicio">
   <div class="card">

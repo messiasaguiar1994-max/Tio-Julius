@@ -16,13 +16,31 @@ const CFG = {
 // ---------------- render
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 let escala = 1; renderer.setPixelRatio(escala);
-renderer.setSize(innerWidth, innerHeight);
+// tela sempre vertical 9:16 (TikTok), centralizada; o resto fica preto
+const palco = document.getElementById('palco');
+let SW = 0, SH = 0;
+function medePalco() {
+  SH = innerHeight; SW = Math.round(SH * 9 / 16);
+  if (SW > innerWidth) { SW = innerWidth; SH = Math.round(SW * 16 / 9); }
+  palco.style.width = SW + 'px'; palco.style.height = SH + 'px';
+}
+medePalco();
+renderer.setSize(SW, SH);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 document.getElementById('cena').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 130);
-addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+const camera = new THREE.PerspectiveCamera(58, 9 / 16, .1, 130);
+addEventListener('resize', () => { // tela sempre vertical 9:16 (TikTok), centralizada; o resto fica preto
+const palco = document.getElementById('palco');
+let SW = 0, SH = 0;
+function medePalco() {
+  SH = innerHeight; SW = Math.round(SH * 9 / 16);
+  if (SW > innerWidth) { SW = innerWidth; SH = Math.round(SW * 16 / 9); }
+  palco.style.width = SW + 'px'; palco.style.height = SH + 'px';
+}
+medePalco();
+renderer.setSize(SW, SH); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 
 scene.add(new THREE.HemisphereLight(0xffd9b0, 0x5a4a5a, 1.6));
 const sun = new THREE.DirectionalLight(0xffb070, 2.2); sun.position.set(-60, 45, -30); scene.add(sun);
@@ -306,10 +324,10 @@ const tmpV = new THREE.Vector3(); let bw = 0, bh = 0, bx = -1, by = -1;
 function posicionaBalao() {
   if (!tio.obj || balao.style.display === 'none') return;
   tmpV.copy(tio.pos); tmpV.y += 2.0; tmpV.project(camera);
-  let x = (tmpV.x * .5 + .5) * innerWidth, y = (-tmpV.y * .5 + .5) * innerHeight - 18; // ponta do balão acima da cabeça
+  let x = (tmpV.x * .5 + .5) * SW, y = (-tmpV.y * .5 + .5) * SH - 18; // ponta do balão acima da cabeça
   if (!bw) { bw = balao.offsetWidth; bh = balao.offsetHeight; }
-  x = Math.max(bw / 2 + 8, Math.min(innerWidth - bw / 2 - 8, x));
-  y = Math.max(bh + 62, Math.min(innerHeight * .6, y));
+  x = Math.max(bw / 2 + 8, Math.min(SW - bw / 2 - 8, x));
+  y = Math.max(bh + 62, Math.min(SH * .6, y));
   x = Math.round(x - bw / 2); y = Math.round(y - bh);
   if (x !== bx || y !== by) { bx = x; by = y; balao.style.transform = `translate(${x}px, ${y}px)`; }
 }
