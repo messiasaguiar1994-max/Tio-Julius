@@ -103,7 +103,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
   const pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
-    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : ''} Agradeça emocionado, numa frase só, tratando o presente como um tesouro que vai guardar no cofre (junto com os recibos, ou até o aniversário de 100 anos). NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes.`
+    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} Agradeça emocionado, numa frase só (até 30 palavras), com um fato absurdo de pão-duro. Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
       : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
@@ -220,7 +220,16 @@ function proximoMonologo() {
 function frasePronta(nome, texto, tipo) {
   const n = limpaNome(nome); const t = (texto || '').toLowerCase();
   if (tipo === 'monologo') return proximoMonologo();
-  if (tipo === 'presente') return sorteia([`Ô ${n}, obrigado! Presente bom é esse: alegria sem aparecer na fatura!`, `${n}, valeu! Vou guardar esse carinho junto com meus cupons de desconto.`, `Obrigado, ${n}! Agora posso economizar o dinheiro que eu ia gastar agradecendo.`]);
+  if (tipo === 'presente') return sorteia([
+    `Ô ${n}, obrigado! Presente bom é esse: alegria sem aparecer na fatura!`,
+    `${n}, valeu! Vou guardar esse carinho junto com meus cupons de desconto.`,
+    `Obrigado, ${n}! Agora posso economizar o dinheiro que eu ia gastar agradecendo.`,
+    `Ai, ${n}... primeiro presente que eu ganho desde a amostra grátis de queijo do mercado. Vou guardar a vida inteira.`,
+    `Meu Deus, ${n}! Vou anotar no caderninho de contas, pela primeira vez na coluna de entrada.`,
+    `${n}, quase acendi a luz da sala pra comemorar... mas me segurei. Muito obrigado!`,
+    `Obrigado, ${n}! Vai pra caixa de sapato debaixo da cama, com três cadeados.`,
+    `Ô ${n}, meu coração bateu tão forte que gastou energia... mas por você valeu a pena!`,
+  ]);
   if (tipo === 'chegada') return sorteia([`Chegou o ${n}! Entra, mas apaga a luz do corredor pra gente economizar.`, `Bem-vindo, ${n}! Puxa uma cadeira; é de graça e já estava aqui.`, `Olha o ${n} aí! Senta na calçada, que o aluguel desse pedaço já está pago.`]);
   if (/\b(oi|ola|olá|eae|e ai|e aí|salve|fala)\b/.test(t)) return sorteia([`Oi, ${n}! Chega mais; conversa boa não gasta energia.`, `Salve, ${n}! Tudo em paz? Espero que sem boleto surpresa.`, `E aí, ${n}! Fica à vontade, só não deixa a torneira aberta.`]);
   if (/(bom dia|boa tarde|boa noite)/.test(t)) return `${t.match(/(bom dia|boa tarde|boa noite)/)[1].replace(/^./, c => c.toUpperCase())}, ${n}! Que Deus abençoe seu dia.`;
@@ -274,7 +283,23 @@ async function vozFish(texto, voz) {
 
 // ---------------- fila de falas
 const cacheVoz = new Map(); // áudio das frases prontas, para não chamar o Fish de novo
-const sessao = { prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const ANGULOS_PRESENTE = [
+  'é o primeiro presente que você ganha desde a amostra grátis de queijo no supermercado em 1998',
+  'vai emoldurar e pendurar na sala, e cobrar entrada dos parentes que quiserem ver',
+  'vai anotar no caderninho de contas, pela primeira vez na vida, na coluna de entrada',
+  'ficou tão emocionado que quase acendeu a luz da sala pra comemorar, mas se controlou',
+  'vai guardar numa caixa de sapato debaixo da cama, trancada com três cadeados',
+  'vai contar essa história pros netos, e cobrar deles um centavo por cada vez que contar',
+  'vai fazer um seguro pro presente, mas só se o seguro for de graça',
+  'o coração dele bateu tão forte que gastou energia, mas valeu a pena',
+  'vai mostrar pros 3 filhos como prova de que coisa boa às vezes chega de graça',
+  'vai deixar o presente no testamento, junto com o resto do sabonete que ele economiza',
+  'chorou de emoção, mas aparou as lágrimas num copo pra regar a planta',
+  'vai dormir abraçado com o presente pra ninguém do bairro pegar',
+  'nunca ninguém deu nada pra ele de graça, nem bom dia, porque bom dia também gasta saliva',
+  'vai colocar o nome da pessoa na lista de convidados do churrasco que ele nunca vai fazer',
+];
+const sessao = { presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
@@ -292,7 +317,15 @@ async function processa() {
   try {
     const livre = (seg) => Date.now() - sessao.ultimaAcao > seg * 1000;
     if (it.danca) it.acao = 'danca';
-    else if (it.tipo === 'presente' && livre(12)) it.acao = 'cambalhota';
+    else if (it.tipo === 'presente' && livre(12)) {
+      const opcoes = ['cambalhota', 'danca', 'cambalhota', 'danca', 'flutuar'].filter(a => a !== sessao.acaoPresente);
+      it.acao = sessao.acaoPresente = sorteia(opcoes);
+    }
+    if (it.tipo === 'presente') {
+      const livres = ANGULOS_PRESENTE.filter(a => !sessao.angulos.includes(a));
+      it.angulo = sorteia(livres.length ? livres : ANGULOS_PRESENTE);
+      sessao.angulos.push(it.angulo); if (sessao.angulos.length > 8) sessao.angulos.shift();
+    }
     else if (it.tipo === 'monologo' && livre(90) && Math.random() < 0.15) it.acao = sorteia(['alongar', 'sentar']);
     else if (it.tipo === 'comentario' && !it.pedidoDanca && livre(40)) it.podeAcao = true;
     let resposta = (await respostaIA(it.nome, it.texto, it.tipo, it)).replace(/\s+/g, ' ');
@@ -310,6 +343,7 @@ async function processa() {
     if (buf) { const id = randomUUID(); audios.set(id, { buf, t: Date.now() }); audio = '/audio/' + id; }
     sessao.pendentes++; sessao.ultimaFala = Date.now();
     if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
+    if (it.tipo === 'presente') { sessao.presentes.push(resposta); if (sessao.presentes.length > 6) sessao.presentes.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
     io.emit('fala', { acao: it.acao || null, vip: !!it.vip, danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
