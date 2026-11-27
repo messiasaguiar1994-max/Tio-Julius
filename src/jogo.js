@@ -89,12 +89,23 @@ new GLTFLoader().load(window.MODELO || 'models/tio.glb', (g) => {
   let armScale = 1; root.traverse(o => { if (o.name === 'Armature') armScale = o.scale.x; });
   for (const clip of g.animations) {
     // andar no lugar: o quadril anda para a frente no eixo 1 (e de lado no 0) — trava os dois e deixa só o sobe-e-desce (eixo 2)
-    if (/^(andar|virar)/.test(clip.name)) for (const tr of clip.tracks) if (/Hips\.position$/.test(tr.name)) {
+    if (/^(andar|virar|cambalhota)/.test(clip.name)) for (const tr of clip.tracks) if (/Hips\.position$/.test(tr.name)) {
       const v = tr.values, n = v.length;
       if (clip.name === 'andar') tio.passo = Math.abs(v[n - 2] - v[1]) * armScale * s / clip.duration; // metros por segundo dos pés
       for (let k = 0; k < n; k += 3) { v[k] = v[0]; v[k + 1] = v[1]; }
     }
     const a = tio.mixer.clipAction(clip); tio.acts[clip.name] = a;
+    if (ACOES[clip.name]?.once) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+  }
+  // caixote de madeira para ele sentar: mede a altura do quadril sentado
+  let hips = null; root.traverse(o => { if (o.isBone && /Hips$/.test(o.name)) hips = o; });
+  if (tio.acts.sentar && hips) {
+    tio.acts.sentar.reset().play(); tio.mixer.update(1.2); holder.updateMatrixWorld(true);
+    const hp = holder.worldToLocal(hips.getWorldPosition(new THREE.Vector3()));
+    tio.acts.sentar.stop(); tio.mixer.update(0);
+    const alt = Math.max(.25, hp.y - .13);
+    caixote = criaCaixote(alt); caixote.position.set(hp.x, alt / 2, hp.z - .06); caixote.visible = false; holder.add(caixote);
+    console.log('altura do caixote', alt.toFixed(2));
   }
   console.log('velocidade dos pés', tio.passo);
   tio.acts.andar.play();
@@ -110,15 +121,36 @@ new GLTFLoader().load(window.MODELO || 'models/tio.glb', (g) => {
   document.getElementById('carregando').style.display = 'none';
 });
 
+// movimentos especiais (o servidor escolhe; a câmera continua de frente)
+const ACOES = {
+  danca: { dur: 9 }, capoeira: { dur: 6.9 }, flutuar: { dur: 7.2 },
+  cambalhota: { dur: 3.4, once: true }, alongar: { dur: 8.6, once: true }, sentar: { dur: 8.2, once: true }, bravo: { dur: 7.8, once: true },
+};
+let caixote = null;
+function criaCaixote(alt) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = '#9a6b3f'; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 4; i++) { x.fillStyle = i % 2 ? '#a87648' : '#8f6038'; x.fillRect(4, 6 + i * 30, 120, 24); }
+  x.strokeStyle = 'rgba(60,35,15,.55)'; x.lineWidth = 3; for (let i = 0; i < 40; i++) { x.beginPath(); const yy = Math.random() * 128; x.moveTo(Math.random() * 128, yy); x.lineTo(Math.random() * 128, yy + Math.random() * 3); x.stroke(); }
+  x.strokeStyle = '#5a3a1e'; x.lineWidth = 8; x.strokeRect(4, 4, 120, 120);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(new THREE.BoxGeometry(.5, alt, .44), new THREE.MeshStandardMaterial({ map: t, roughness: .9 }));
+}
+export function acao(nome) {
+  const cfg = ACOES[nome];
+  if (!pronto || !cfg || tio.estado === 'acao') return;
+  const clip = nome === 'danca' ? ['danca1', 'danca2', 'robo'][Math.floor(rnd() * 3)] : nome;
+  if (!tio.acts[clip]) return;
+  tio.estado = 'acao'; tio.acaoAtual = nome; tio.restoAcao = cfg.dur; // conta no tempo da animação (não trunca se o PC engasgar)
+  trocar(clip, nome === 'sentar' ? .6 : .4);
+  if (caixote) caixote.visible = nome === 'sentar';
+}
+export function dancar() { acao('danca'); }
+
 function trocar(nome, fade = .4) {
   const novo = tio.acts[nome]; if (!novo) return;
   for (const [k, a] of Object.entries(tio.acts)) if (k !== nome && a.isRunning()) a.fadeOut(fade);
   novo.reset().setEffectiveWeight(1).fadeIn(fade).play();
-}
-export function dancar(seg = 6) {
-  if (!pronto || tio.estado === 'danca') return;
-  tio.estado = 'danca'; tio.fimDanca = performance.now() + seg * 1000;
-  trocar(rnd() < .5 ? 'danca1' : 'danca2', .5);
 }
 
 
@@ -361,11 +393,11 @@ async function tocarProxima() {
   bPerg.textContent = f.pergunta || (f.tipo === 'chegada' ? 'chegou na live 👋' : '');
   bPerg.style.display = bPerg.textContent ? 'block' : 'none';
   bResp.textContent = '';
-  if (f.danca) dancar(9); // dança só quando o servidor libera (quem mandou presente pediu)
+  if (f.acao) acao(f.acao); else if (f.danca) acao('danca'); // o servidor decide quando (dança no máx. 1x por minuto)
   const comBalao = f.tipo !== 'monologo'; // falando sozinho: só a voz, sem balão
   balao.classList.toggle('vip', !!f.vip);
   if (comBalao) { balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra'); }
-  tio.falando = true; camForce = tio.estado === 'danca' ? null : 'frente';
+  tio.falando = true; camForce = tio.estado === 'acao' ? null : 'frente';
   const texto = f.resposta;
   let dur = Math.max(2.5, texto.length / 14);
   let fim;
@@ -442,8 +474,9 @@ function loop() {
       const VEL = tio.passo || 1.5, v = VEL * (1 - Math.min(.5, Math.abs(dy) / 2));
       tio.pos.x += Math.sin(tio.yaw) * v * dt; tio.pos.z += Math.cos(tio.yaw) * v * dt;
       tio.acts.andar.timeScale = v / VEL;
-    } else if (tio.estado === 'danca' && now > tio.fimDanca) {
-      tio.estado = 'andar'; trocar('andar', .5);
+    } else if (tio.estado === 'acao' && (tio.restoAcao -= dt) <= 0) {
+      tio.estado = 'andar'; trocar('andar', tio.acaoAtual === 'sentar' ? .7 : .5);
+      if (caixote && caixote.visible) setTimeout(() => { if (tio.estado !== 'acao' || tio.acaoAtual !== 'sentar') caixote.visible = false; }, 650);
     }
     tio.obj.position.copy(tio.pos); tio.obj.rotation.y = tio.yaw;
     tio.mixer.update(dt);
@@ -501,7 +534,7 @@ function loop() {
 }
 loop();
 window.__info = () => renderer.info.render;
-window.__dancar = dancar; window.__tio = tio; window.__cam = camera; window.__npcs = npcs;
+window.__dancar = dancar; window.__acao = acao; window.__tio = tio; window.__cam = camera; window.__npcs = npcs;
 
 // ---------------- conexão com o servidor ou modo demonstração
 // ---------- novo seguidor: faixa no topo + confete (um de cada vez, sem atrapalhar)
@@ -519,7 +552,7 @@ function proximoSeguidor() {
   segAtivo = true;
   const ini = (s.nome || '?')[0].toUpperCase();
   segEl.querySelector('img').src = s.foto || 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#c2410c"/><text x="20" y="27" font-size="20" text-anchor="middle" fill="#fff" font-family="Arial">' + ini + '</text></svg>');
-  segEl.querySelector('span').textContent = '@' + (s.nome || '').slice(0, 22);
+  segEl.querySelector('span').textContent = '@' + (s.nome || '').slice(0, 22) + ' seguiu o criador';
   segEl.classList.remove('mostra'); void segEl.offsetWidth; segEl.classList.add('mostra');
   const palco = document.getElementById('palco');
   const cores = ['#f43f5e', '#22c55e', '#3b82f6', '#fbbf24', '#a855f7', '#fff'];

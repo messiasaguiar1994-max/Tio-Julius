@@ -103,16 +103,16 @@ async function respostaIA(nome, texto, tipo, it = {}) {
   const pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
-    ? `${limpaNome(nome)} mandou um presente (${texto}). Agradeça emocionado, numa frase só, tratando o presente como um tesouro que vai guardar no cofre (junto com os recibos, ou até o aniversário de 100 anos). NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes.`
+    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : ''} Agradeça emocionado, numa frase só, tratando o presente como um tesouro que vai guardar no cofre (junto com os recibos, ou até o aniversário de 100 anos). NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes.`
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
       : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
-        ? (' (Agora você VAI dançar para essa pessoa: responda topando, numa frase só, e diga que é especialmente pra ela' + (it.dancaLivre ? ', mas que é rapidinho pra não gastar a sola do sapato.)' : '.)'))
+        ? ' (Agora você VAI dançar para essa pessoa: responda topando, numa frase só, e diga que é especialmente pra ela.)'
         : it.pedidoDanca
           ? (it.dancouAgora
             ? ' (Você acabou de dançar faz pouco tempo: diga que precisa recuperar o fôlego e economizar a sola do sapato, e que daqui a pouco dança de novo. NUNCA mencione presentes.)'
             : ' (Você NÃO vai dançar agora: dê uma desculpa no seu jeito aflito, ligada a cansaço, sola de sapato gasta ou contas. NUNCA mencione presentes, rosas ou o que a pessoa poderia fazer para você dançar.)')
-          : '');
+          : (it.podeAcao ? ` Movimentos: se, e só se, o comentário combinar MUITO com um destes movimentos, coloque no FINAL da resposta UMA etiqueta entre colchetes, e a sua fala tem que combinar com o movimento: [capoeira] quando falarem de perigo, briga, ladrão, luta, valentão ou bairro perigoso (ex.: "Que perigoso nada, eu sei lutar capoeira!"); [sentar] quando falarem de cansaço, de andar demais, de descanso ou de sentar (ex.: "Você tem razão, melhor fazer uma pausa pra recuperar as energias antes do segundo turno."); [alongar] quando falarem de academia, exercício, preguiça, dor nas costas ou acordar cedo; [bravo] quando você ficar indignado de verdade com um preço absurdo, uma conta altíssima ou alguém pedindo dinheiro; [flutuar] quando falarem de mágica, milagre, voar ou paz (ex.: o dinheiro que some por mágica). Na maioria das respostas NÃO use etiqueta nenhuma.` : ''));
   if (OPENAI_API_KEY) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
       try {
@@ -274,7 +274,7 @@ async function vozFish(texto, voz) {
 
 // ---------------- fila de falas
 const cacheVoz = new Map(); // áudio das frases prontas, para não chamar o Fish de novo
-const sessao = { doadores: new Map(), creditos: new Map(), ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
@@ -290,7 +290,16 @@ async function processa() {
   sessao.ocupado = true;
   const it = sessao.fila.shift();
   try {
-    const resposta = (await respostaIA(it.nome, it.texto, it.tipo, it)).replace(/\s+/g, ' ').slice(0, 360);
+    const livre = (seg) => Date.now() - sessao.ultimaAcao > seg * 1000;
+    if (it.danca) it.acao = 'danca';
+    else if (it.tipo === 'presente' && livre(12)) it.acao = 'cambalhota';
+    else if (it.tipo === 'monologo' && livre(90) && Math.random() < 0.15) it.acao = sorteia(['alongar', 'sentar']);
+    else if (it.tipo === 'comentario' && !it.pedidoDanca && livre(40)) it.podeAcao = true;
+    let resposta = (await respostaIA(it.nome, it.texto, it.tipo, it)).replace(/\s+/g, ' ');
+    const m = resposta.match(/\[(capoeira|sentar|alongar|bravo|flutuar)\]/i);
+    if (m && it.podeAcao) it.acao = m[1].toLowerCase();
+    resposta = resposta.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 360);
+    if (it.acao) { sessao.ultimaAcao = Date.now(); console.log('Movimento:', it.acao); }
     let qual = 'fish', buf = null;
     const chaveCache = sessao.voz + '|' + resposta;
     if (it.tipo === 'monologo' && cacheVoz.has(chaveCache)) { buf = cacheVoz.get(chaveCache); qual = 'fish (guardado)'; }
@@ -302,7 +311,7 @@ async function processa() {
     sessao.pendentes++; sessao.ultimaFala = Date.now();
     if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
-    io.emit('fala', { vip: !!it.vip, danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
+    io.emit('fala', { acao: it.acao || null, vip: !!it.vip, danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
   sessao.ocupado = false;
   processa();
@@ -320,21 +329,18 @@ setInterval(() => { if (sessao.pendentes > 0 && Date.now() - (sessao.ultimoTocou
 function foto(u) {
   return u?.profilePicture?.url?.[0] || u?.profilePicture?.urls?.[0] || u?.avatarThumb?.urlList?.[0] || u?.avatarThumb?.url?.[0] || u?.avatarMedium?.urlList?.[0] || u?.avatarLarge?.urlList?.[0] || u?.profilePictureUrl || '';
 }
-// pedido de dança: só quem mandou presente nos últimos 15 min, uma vez por presente, e com intervalo entre danças
-const INTERVALO_DANCA = 90e3;
-const DANCA_LIVRE_MIN = 5 * 60e3; // sem presente: no máximo uma dança a cada 5 min, e só às vezes
-const ehVip = (nome) => Date.now() - (sessao.doadores.get(nome) || 0) < 30 * 60e3; // mandou presente nos últimos 30 min
+// dança: qualquer pessoa pode pedir, no máximo uma dança por minuto
+const INTERVALO_DANCA = 60e3;
+// prioridade: cada presente dá direito a UM comentário passar na frente da fila
 function itemComentario(nome, fotoUrl, texto) {
-  const it = { tipo: 'comentario', nome, foto: fotoUrl, texto, vip: ehVip(nome) };
+  const it = { tipo: 'comentario', nome, foto: fotoUrl, texto };
+  const fichas = sessao.prioridade.get(nome) || 0;
+  if (fichas > 0) { it.vip = true; if (fichas > 1) sessao.prioridade.set(nome, fichas - 1); else sessao.prioridade.delete(nome); }
   if (/dan[cç]|dance|rebola|requebra/i.test(texto)) {
     it.pedidoDanca = true;
-    const c = sessao.creditos.get(nome);
-    const valido = c && c.n > 0 && Date.now() - c.t < 15 * 60e3;
-    if (valido && Date.now() - sessao.ultimaDanca > INTERVALO_DANCA) { it.danca = true; c.n--; sessao.ultimaDanca = Date.now(); }
-    else if (valido) it.dancouAgora = true;
-    else if (Date.now() - sessao.ultimaDanca > DANCA_LIVRE_MIN && Math.random() < 0.35) { it.danca = true; it.dancaLivre = true; sessao.ultimaDanca = Date.now(); }
-    else if (Date.now() - sessao.ultimaDanca < INTERVALO_DANCA) it.dancouAgora = true;
-    console.log('Pedido de dança:', nome, it.danca ? (it.dancaLivre ? '→ dança de vez em quando (sem presente)' : '→ vai dançar') : it.dancouAgora ? '→ dançou há pouco' : '→ desculpa');
+    if (Date.now() - sessao.ultimaDanca > INTERVALO_DANCA) { it.danca = true; sessao.ultimaDanca = Date.now(); }
+    else it.dancouAgora = true;
+    console.log('Pedido de dança:', nome, it.danca ? '→ vai dançar' : '→ dançou há menos de 1 minuto');
   }
   return it;
 }
@@ -375,8 +381,7 @@ async function conectar(usuario) {
     const nome = nomeDe(d);
     const giftName = d.giftDetails?.giftName || d.gift?.name || d.extendedGiftInfo?.name || 'presente';
     console.log('Presente:', nome, '→', giftName);
-    sessao.doadores.set(nome, Date.now());
-    sessao.creditos.set(nome, { n: Math.min(3, (sessao.creditos.get(nome)?.n || 0) + 1), t: Date.now() }); // 1 dança por presente (máx. 3 guardadas)
+    sessao.prioridade.set(nome, Math.min(5, (sessao.prioridade.get(nome) || 0) + 1)); // 1 comentário com prioridade por presente
     enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName }, true);
   });
   live.on(WebcastEvent.FOLLOW, (d) => {
