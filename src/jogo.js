@@ -363,6 +363,7 @@ async function tocarProxima() {
   bResp.textContent = '';
   if (f.danca) dancar(9); // dança só quando o servidor libera (quem mandou presente pediu)
   const comBalao = f.tipo !== 'monologo'; // falando sozinho: só a voz, sem balão
+  balao.classList.toggle('vip', !!f.vip);
   if (comBalao) { balao.style.display = 'block'; bw = 0; balao.classList.remove('sai'); void balao.offsetWidth; balao.classList.add('entra'); }
   tio.falando = true; camForce = tio.estado === 'danca' ? null : 'frente';
   const texto = f.resposta;
@@ -503,6 +504,41 @@ window.__info = () => renderer.info.render;
 window.__dancar = dancar; window.__tio = tio; window.__cam = camera; window.__npcs = npcs;
 
 // ---------------- conexão com o servidor ou modo demonstração
+// ---------- novo seguidor: faixa no topo + confete (um de cada vez, sem atrapalhar)
+const segEl = document.getElementById('seguiu');
+const segFila = [];
+let segAtivo = false;
+function novoSeguidor(s) {
+  if (segFila.length >= 6) segFila.pop(); // muita gente de uma vez: mostra só os primeiros
+  segFila.push(s);
+  if (!segAtivo) proximoSeguidor();
+}
+function proximoSeguidor() {
+  const s = segFila.shift();
+  if (!s) { segAtivo = false; return; }
+  segAtivo = true;
+  const ini = (s.nome || '?')[0].toUpperCase();
+  segEl.querySelector('img').src = s.foto || 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#c2410c"/><text x="20" y="27" font-size="20" text-anchor="middle" fill="#fff" font-family="Arial">' + ini + '</text></svg>');
+  segEl.querySelector('span').textContent = '@' + (s.nome || '').slice(0, 22);
+  segEl.classList.remove('mostra'); void segEl.offsetWidth; segEl.classList.add('mostra');
+  const palco = document.getElementById('palco');
+  const cores = ['#f43f5e', '#22c55e', '#3b82f6', '#fbbf24', '#a855f7', '#fff'];
+  for (let i = 0; i < 26; i++) {
+    const c = document.createElement('div');
+    c.className = 'confete';
+    c.style.left = (30 + Math.random() * 40) + '%';
+    c.style.top = 'calc(var(--u) * ' + (14 + Math.random() * 5).toFixed(1) + ')';
+    c.style.background = cores[i % cores.length];
+    c.style.setProperty('--dx', 'calc(var(--u) * ' + ((Math.random() - .5) * 30).toFixed(1) + ')');
+    c.style.setProperty('--r', ((Math.random() - .5) * 900).toFixed(0) + 'deg');
+    c.style.animationDelay = (Math.random() * .25).toFixed(2) + 's';
+    palco.appendChild(c);
+    setTimeout(() => c.remove(), 2300);
+  }
+  setTimeout(() => { segEl.classList.remove('mostra'); setTimeout(proximoSeguidor, 300); }, 3800);
+}
+window.__seguiu = novoSeguidor;
+
 const status = document.getElementById('status');
 function setStatus(t, ok) { status.textContent = t; status.className = ok ? 'ok' : ''; status.style.opacity = 1; clearTimeout(setStatus.t); if (ok) setStatus.t = setTimeout(() => status.style.opacity = 0, 6000); }
 
@@ -532,6 +568,7 @@ export function iniciar(cfg) {
   sock.on('connect', () => { sock.emit('iniciar', { usuario: CFG.usuario, voz: CFG.voz, teste: CFG.modoTeste }); });
   sock.on('status', (s) => setStatus(s.texto, s.ok));
   sock.on('fala', (f) => { f.onDone = () => sock.emit('tocou', f.id); receberFala(f); });
+  sock.on('seguiu', novoSeguidor);
   sock.on('disconnect', () => setStatus('Servidor desconectado, tentando de novo…'));
   window.__sock = sock;
 }

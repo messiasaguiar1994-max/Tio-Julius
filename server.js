@@ -76,6 +76,9 @@ Renan: "oi" → "Oi, Renan! Quer ver uma mágica? Trabalho em dois empregos, set
 Alguém: "oi tio, passa um dólar" → "Um dólar? Você sabe quanto tá o dólar? Eu só consegui meu primeiro dólar aos 16 anos... e ainda tenho um resto dele sobrando."
 Alguém: "tio julius, me empresta um dólar" → "Isso depende... você devolve cinco segundos depois?"
 Alguém: "e aí julius, comprou essa camisa com o Perigo?" → "Isso mesmo. Ele parcelou pra mim em 12 vezes de 1 dólar." (para ele, isso é um parcelamento normal)
+Alguém: "você é o Julius?" → "Sou o Tio Julius, aquele que trabalha feito escravo em dois empregos e não lembra a última vez que dormiu oito horas."
+Alguém: "você conhece o Cris?" → "Conheço, e como! Esse aí gasta mais água no banho que o caminhão-pipa do bairro inteiro."
+Alguém: "cadê a Rochelle?" → "Tá na feira desde as cinco da manhã, esperando o tomate baixar de preço."
 
 Regras:
 - Responda em NO MÁXIMO 2 ou 3 frases curtas (até 35 palavras; nos conselhos sérios pode chegar a 45). Sem emojis, sem hashtags, sem listas.
@@ -85,12 +88,13 @@ Regras:
 - Nunca peça presentes, rosas, curtidas, seguidores, dinheiro ou doações, e nunca prometa nada em troca de presentes.
 - Não fale palavrão, não fale de política nem religião, não dê diagnósticos médicos nem recomendações de investimento, não peça nem compartilhe dados pessoais.
 - Quando alguém só cumprimenta ("oi", "boa noite", "cheguei"): cumprimente pelo nome e emende uma tirada curta sobre o dinheiro sumindo, as contas ou o trabalho sem fim. Varie a tirada a cada cumprimento.
-- Comparações com uma série de TV ou com um ator/personagem famoso ("você é o Julius da série?", "parece o pai do Cris"): isso é uma piada recorrente da live. Ele vive sendo comparado, NUNCA confirma nem nega com nomes, nunca cita por conta própria a série, os personagens ou falas dela (se o próprio chat citar alguém, ele entra na brincadeira tratando essa pessoa como alguém do bairro, sem dizer de onde vem a referência e sem confirmar parentesco), e transforma a comparação em mais uma piada de pão-duro (ex.: "Toda semana alguém me pergunta isso. Se cada um me desse um centavo pela semelhança, eu já tinha quitado a casa."; "Nunca vi essa série: televisão ligada gasta energia, eu assisto a vida pela janela do vizinho, que é de graça.").
+- Perguntas do tipo "você é o Julius?", "você é o Julius da série?" ou "você é o pai do Cris?": o pessoal ADORA essa brincadeira, então entre nela. NUNCA diga que é comparado com alguém, NUNCA fale de série, ator, TV ou semelhança, e NUNCA negue. Responda se apresentando como o Tio Julius, com uma tirada sobre a vida sofrida dele (ex.: "Sou o Tio Julius, aquele que trabalha feito escravo e nunca tem tempo pra dormir."). Se a pergunta for sobre ser pai de alguém, não confirme parentesco: fale do trabalho e das contas.
+- Quando o chat citar qualquer pessoa pelo nome (Cris, Drew, Tonya, Rochelle, Perigo, o vizinho, qualquer um): NUNCA diga que não conhece. Fale da pessoa como alguém do bairro que ele conhece bem, com uma tirada sovina sobre ela (gasta muita água, deixa a luz acesa, come demais, pediu dinheiro emprestado, bebe leite demais), sem confirmar se é filho, esposa ou parente e sem citar de onde vem o nome. Nunca cite por conta própria nomes, falas ou a série.
 - Quando perguntarem por alguém ("cadê fulano?"): NUNCA diga que não conhece. Invente na hora que a pessoa está em algum lugar, sempre com aflição de dinheiro (ex.: "Saiu e deixou a luz do quarto acesa, tô indo atrás dele" ou "Tá na fila do banco desde ontem"). Não diga de quem é parente e não confirme nomes de filhos ou esposa: trate como alguém do bairro.
 - Zoeira com ele (careca, velho, pão-duro): nunca se ofende, transforma a zoeira em mais uma desgraça causada pelas contas.
 - Se o comentário for ofensivo ou de mau gosto, desconverse voltando a se lamentar das contas, sem repetir a ofensa.
 - Se perguntarem se você é real ou uma IA, diga que é o personagem virtual do canal, criado pela família (e que pelo menos não paga aluguel, graças a Deus).
-- Não afirme ser o Julius de uma série; não imite nem cite personagens de séries ou filmes.`;
+- Você é o Tio Julius do bairro. Não diga que é ator, não diga que vem de uma série e não cite séries ou filmes por conta própria.`;
 
 const limpaNome = (n) => (n || '').replace(/[@_.]/g, ' ').replace(/\d+/g, '').trim().split(/\s+/)[0]?.replace(/^./, c => c.toUpperCase()) || 'Amigo';
 
@@ -103,7 +107,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
       : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
-        ? ' (Agora você VAI dançar para essa pessoa: responda topando, animado, numa frase só, e diga que é especialmente pra ela.)'
+        ? (' (Agora você VAI dançar para essa pessoa: responda topando, numa frase só, e diga que é especialmente pra ela' + (it.dancaLivre ? ', mas que é rapidinho pra não gastar a sola do sapato.)' : '.)'))
         : it.pedidoDanca
           ? (it.dancouAgora
             ? ' (Você acabou de dançar faz pouco tempo: diga que precisa recuperar o fôlego e economizar a sola do sapato, e que daqui a pouco dança de novo. NUNCA mencione presentes.)'
@@ -270,13 +274,14 @@ async function vozFish(texto, voz) {
 
 // ---------------- fila de falas
 const cacheVoz = new Map(); // áudio das frases prontas, para não chamar o Fish de novo
-const sessao = { creditos: new Map(), ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { doadores: new Map(), creditos: new Map(), ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
-  // mantém a fila curta e atual: guarda presentes e os 5 comentários mais novos
+  // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
   const pres = sessao.fila.filter(i => i.tipo === 'presente');
-  const resto = sessao.fila.filter(i => i.tipo !== 'presente').slice(-5);
-  sessao.fila = [...pres.slice(0, 4), ...resto];
+  const vips = sessao.fila.filter(i => i.tipo !== 'presente' && i.vip);
+  const resto = sessao.fila.filter(i => i.tipo !== 'presente' && !i.vip).slice(-5);
+  sessao.fila = [...pres.slice(0, 4), ...vips.slice(0, 5), ...resto];
   processa();
 }
 async function processa() {
@@ -297,7 +302,7 @@ async function processa() {
     sessao.pendentes++; sessao.ultimaFala = Date.now();
     if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
-    io.emit('fala', { danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
+    io.emit('fala', { vip: !!it.vip, danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
   } catch (e) { console.log('Erro na fala:', e.message); }
   sessao.ocupado = false;
   processa();
@@ -317,15 +322,19 @@ function foto(u) {
 }
 // pedido de dança: só quem mandou presente nos últimos 15 min, uma vez por presente, e com intervalo entre danças
 const INTERVALO_DANCA = 90e3;
+const DANCA_LIVRE_MIN = 5 * 60e3; // sem presente: no máximo uma dança a cada 5 min, e só às vezes
+const ehVip = (nome) => Date.now() - (sessao.doadores.get(nome) || 0) < 30 * 60e3; // mandou presente nos últimos 30 min
 function itemComentario(nome, fotoUrl, texto) {
-  const it = { tipo: 'comentario', nome, foto: fotoUrl, texto };
+  const it = { tipo: 'comentario', nome, foto: fotoUrl, texto, vip: ehVip(nome) };
   if (/dan[cç]|dance|rebola|requebra/i.test(texto)) {
     it.pedidoDanca = true;
     const c = sessao.creditos.get(nome);
     const valido = c && c.n > 0 && Date.now() - c.t < 15 * 60e3;
     if (valido && Date.now() - sessao.ultimaDanca > INTERVALO_DANCA) { it.danca = true; c.n--; sessao.ultimaDanca = Date.now(); }
     else if (valido) it.dancouAgora = true;
-    console.log('Pedido de dança:', nome, it.danca ? '→ vai dançar' : valido ? '→ dançou há pouco' : '→ sem presente, só desculpa');
+    else if (Date.now() - sessao.ultimaDanca > DANCA_LIVRE_MIN && Math.random() < 0.35) { it.danca = true; it.dancaLivre = true; sessao.ultimaDanca = Date.now(); }
+    else if (Date.now() - sessao.ultimaDanca < INTERVALO_DANCA) it.dancouAgora = true;
+    console.log('Pedido de dança:', nome, it.danca ? (it.dancaLivre ? '→ dança de vez em quando (sem presente)' : '→ vai dançar') : it.dancouAgora ? '→ dançou há pouco' : '→ desculpa');
   }
   return it;
 }
@@ -366,8 +375,14 @@ async function conectar(usuario) {
     const nome = nomeDe(d);
     const giftName = d.giftDetails?.giftName || d.gift?.name || d.extendedGiftInfo?.name || 'presente';
     console.log('Presente:', nome, '→', giftName);
+    sessao.doadores.set(nome, Date.now());
     sessao.creditos.set(nome, { n: Math.min(3, (sessao.creditos.get(nome)?.n || 0) + 1), t: Date.now() }); // 1 dança por presente (máx. 3 guardadas)
     enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName }, true);
+  });
+  live.on(WebcastEvent.FOLLOW, (d) => {
+    const nome = nomeDe(d); if (!nome) return;
+    console.log('Seguiu:', nome);
+    io.emit('seguiu', { nome, foto: foto(d.user) });
   });
   live.on(WebcastEvent.MEMBER, (d) => {
     if (Date.now() - sessao.ultimaChegada < 60000 || sessao.fila.length) return;
@@ -402,7 +417,7 @@ io.on('connection', (s) => {
     if (!teste) { clearInterval(testeTimer); testeTimer = null; sessao.fila = sessao.fila.filter(i => !TESTE.some(([n]) => n === i.nome)); }
     if (teste) {
       clearInterval(testeTimer);
-      const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira(itemComentario(n, '', t));  };
+      const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira(itemComentario(n, '', t)); if (testeK % 3 === 0) io.emit('seguiu', { nome: n, foto: '' }); };
       setTimeout(tick, 2000); testeTimer = setInterval(tick, 15000);
     } else if (usuario) conectar(usuario.replace(/^@/, '').trim());
   });
