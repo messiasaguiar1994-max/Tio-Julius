@@ -112,7 +112,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
           ? (it.dancouAgora
             ? ' (Você acabou de dançar faz pouco tempo: diga que precisa recuperar o fôlego e economizar a sola do sapato, e que daqui a pouco dança de novo. NUNCA mencione presentes.)'
             : ' (Você NÃO vai dançar agora: dê uma desculpa no seu jeito aflito, ligada a cansaço, sola de sapato gasta ou contas. NUNCA mencione presentes, rosas ou o que a pessoa poderia fazer para você dançar.)')
-          : (it.podeAcao ? ` Movimentos: se, e só se, o comentário combinar MUITO com um destes movimentos, coloque no FINAL da resposta UMA etiqueta entre colchetes, e a sua fala tem que combinar com o movimento: [capoeira] quando falarem de perigo, briga, ladrão, luta, valentão ou bairro perigoso (ex.: "Que perigoso nada, eu sei lutar capoeira!"); [sentar] quando falarem de cansaço, de andar demais, de descanso ou de sentar (ex.: "Você tem razão, melhor fazer uma pausa pra recuperar as energias antes do segundo turno."); [alongar] quando falarem de academia, exercício, preguiça, dor nas costas ou acordar cedo; [bravo] quando você ficar indignado de verdade com um preço absurdo, uma conta altíssima ou alguém pedindo dinheiro; [flutuar] quando falarem de mágica, milagre, voar ou paz (ex.: o dinheiro que some por mágica). Na maioria das respostas NÃO use etiqueta nenhuma.` : ''));
+          : DESC_ACAO[it.acao] ? ` (${DESC_ACAO[it.acao]}. Sua fala tem que combinar com esse movimento.)` : (it.podeAcao ? ` Movimentos: se, e só se, o comentário combinar MUITO com um destes movimentos, coloque no FINAL da resposta UMA etiqueta entre colchetes, e a sua fala tem que combinar com o movimento: [capoeira] quando falarem de perigo, briga, ladrão, luta, valentão ou bairro perigoso (ex.: "Que perigoso nada, eu sei lutar capoeira!"); [sentar] quando falarem de cansaço, de andar demais, de descanso ou de sentar (ex.: "Você tem razão, melhor fazer uma pausa pra recuperar as energias antes do segundo turno."); [alongar] quando falarem de academia, exercício, preguiça, dor nas costas ou acordar cedo; [bravo] quando você ficar indignado de verdade com um preço absurdo, uma conta altíssima ou alguém pedindo dinheiro; [flutuar] quando falarem de mágica, milagre, voar ou paz (ex.: o dinheiro que some por mágica). Na maioria das respostas NÃO use etiqueta nenhuma.` : ''));
   if (OPENAI_API_KEY) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
       try {
@@ -283,6 +283,19 @@ async function vozFish(texto, voz) {
 
 // ---------------- fila de falas
 const cacheVoz = new Map(); // áudio das frases prontas, para não chamar o Fish de novo
+const GATILHOS = {
+  sentar: /cans|descans|senta|pausa|exaust|anda muito|andar tanto|anda tanto|para de andar|parar de andar|n[aã]o para de andar|pernas? (doendo|d[oó]i)/,
+  capoeira: /perig|briga|brigar|ladr|assalt|luta|lutar|valent|bandid|treta|porrada/,
+  alongar: /academia|exerc[ií]c|alonga|pregui[cç]|dor nas costas|malha[rç]|treino/,
+  flutuar: /m[aá]gica|milagre|voar|voa\b|levita|flutua/,
+};
+const DESC_ACAO = {
+  sentar: 'Você vai SENTAR num caixote pra descansar um pouco agora (ex.: "Você tem razão, melhor fazer uma pausa pra recuperar as energias antes do segundo turno.")',
+  capoeira: 'Você vai fazer uns movimentos de CAPOEIRA agora (ex.: "Que perigoso nada, eu sei lutar capoeira!")',
+  alongar: 'Você vai se ALONGAR agora, esticando os braços',
+  flutuar: 'Você vai FLUTUAR no ar agora, como mágica',
+  bravo: 'Você está BRAVO e indignado agora',
+};
 const ANGULOS_PRESENTE = [
   'é o primeiro presente que você ganha desde a amostra grátis de queijo no supermercado em 1998',
   'vai emoldurar e pendurar na sala, e cobrar entrada dos parentes que quiserem ver',
@@ -327,7 +340,12 @@ async function processa() {
       sessao.angulos.push(it.angulo); if (sessao.angulos.length > 8) sessao.angulos.shift();
     }
     else if (it.tipo === 'monologo' && livre(90) && Math.random() < 0.15) it.acao = sorteia(['alongar', 'sentar']);
-    else if (it.tipo === 'comentario' && !it.pedidoDanca && livre(40)) it.podeAcao = true;
+    else if (it.tipo === 'comentario' && !it.pedidoDanca && livre(40)) {
+      // palavras-chave garantem o movimento; nos outros casos a IA pode escolher
+      const t = (it.texto || '').toLowerCase();
+      const chave = Object.entries(GATILHOS).find(([, re]) => re.test(t));
+      if (chave) it.acao = chave[0]; else it.podeAcao = true;
+    }
     let resposta = (await respostaIA(it.nome, it.texto, it.tipo, it)).replace(/\s+/g, ' ');
     const m = resposta.match(/\[(capoeira|sentar|alongar|bravo|flutuar)\]/i);
     if (m && it.podeAcao) it.acao = m[1].toLowerCase();
