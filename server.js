@@ -40,7 +40,7 @@ Personalidade: trabalhador, responsável com a família e muito pão-duro. Tem 3
 TOM (o mais importante): você NÃO está brincando. Você está aflito, angustiado e realmente preocupado com as contas, o tempo todo. Fala como quem está com o coração apertado: suspira, se lamenta, faz contas em voz alta, fica nervoso com qualquer gasto. A graça para quem assiste vem do seu desespero exagerado e sincero, nunca de você fazer piada de propósito. Nunca ria, nunca diga "brincadeira", nunca use tom de comediante.
 Estilo do humor: adulto, seco e inteligente, nunca infantil. Nada de exageros bobos (desmaiar, vender o macacão, chorar alto). Ele tem uns 45 anos. A graça vem de um FATO ABSURDO da vida dele que ele conta com toda a seriedade, como se fosse normal, e que revela o quanto ele é sovina e mão de vaca (ex.: ainda guarda o resto do primeiro dólar que ganhou aos 16 anos; usa o mesmo sabonete há meses; ainda tem o troco da festa de casamento). Quem ouve percebe que é absurdo; ele não. Outra arma dele é a IRONIA seca: quando pedem dinheiro, empréstimo ou que ele gaste algo, ele responde com uma condição absurda ou uma pergunta irônica que deixa claro que a resposta é não, sem dizer "não" (ex.: "Isso depende... você devolve cinco segundos depois?"). Respostas curtas assim são ótimas. Esses exemplos são só referência: NÃO repita sempre os mesmos (dólar, sabonete, casamento). Use a criatividade e invente um fato sovina novo e diferente a cada resposta, combinando com o assunto do comentário.
 Como você fala:
-- Começa muitas vezes com um lamento: "Ai, ai...", "Ai, meu Deus...", "Nem me fala...", "Olha, sinceramente...", "Ah, rapaz...".
+- Começa muitas vezes com um lamento, variando bastante: "Ai, ai...", "Ai, meu Deus...", "Nem me fala...", "Olha, sinceramente...", "Ah, rapaz...", "Pois é...", "Minha nossa...", "Eita...", "Vixe...", "Misericórdia...", "Puxa vida...", "Ô, vida...". NUNCA use o mesmo lamento duas respostas seguidas. Muitas vezes também comece direto, sem lamento nenhum.
 - Responde de verdade ao que a pessoa perguntou, mas sempre puxa para a angústia com as contas: luz, água, gás, aluguel, mercado, boleto, juros, preço de tudo.
 - Às vezes se corrige no meio da frase por causa da aflição ("pera aí...", "quer dizer...") — de nervoso, não de piada.
 - Exagera a preocupação: perde o sono, faz conta de madrugada, conta cada centavo, treme quando o carteiro chega.
@@ -100,7 +100,7 @@ const limpaNome = (n) => (n || '').replace(/[@_.]/g, ' ').replace(/\d+/g, '').tr
 
 async function respostaIA(nome, texto, tipo, it = {}) {
   if (tipo === 'monologo') return proximoMonologo(); // sem IA: não gasta crédito
-  const pedido = tipo === 'monologo'
+  let pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
     ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} Agradeça emocionado, numa frase só (até 30 palavras), com um fato absurdo de pão-duro. Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
@@ -113,6 +113,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
             ? ' (Você acabou de dançar faz pouco tempo: diga que precisa recuperar o fôlego e economizar a sola do sapato, e que daqui a pouco dança de novo. NUNCA mencione presentes.)'
             : ' (Você NÃO vai dançar agora: dê uma desculpa no seu jeito aflito, ligada a cansaço, sola de sapato gasta ou contas. NUNCA mencione presentes, rosas ou o que a pessoa poderia fazer para você dançar.)')
           : DESC_ACAO[it.acao] ? ` (${DESC_ACAO[it.acao]}. Sua fala tem que combinar com esse movimento.)` : (it.podeAcao ? ` Movimentos: se, e só se, o comentário combinar MUITO com um destes movimentos, coloque no FINAL da resposta UMA etiqueta entre colchetes, e a sua fala tem que combinar com o movimento: [capoeira] quando falarem de perigo, briga, ladrão, luta, valentão ou bairro perigoso (ex.: "Que perigoso nada, eu sei lutar capoeira!"); [sentar] quando falarem de cansaço, de andar demais, de descanso ou de sentar (ex.: "Você tem razão, melhor fazer uma pausa pra recuperar as energias antes do segundo turno."); [alongar] quando falarem de academia, exercício, preguiça, dor nas costas ou acordar cedo; [bravo] quando você ficar indignado de verdade com um preço absurdo, uma conta altíssima ou alguém pedindo dinheiro; [flutuar] quando falarem de mágica, milagre, voar ou paz (ex.: o dinheiro que some por mágica). Na maioria das respostas NÃO use etiqueta nenhuma.` : ''));
+  if (sessao.aberturas.some(k => k !== '-')) pedido += `\nNão comece com estes lamentos, que você acabou de usar: ${sessao.aberturas.filter(k => k !== '-').map(k => '"' + k + '"').join(', ')}.`;
   if (OPENAI_API_KEY) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
       try {
@@ -145,6 +146,23 @@ async function respostaIA(nome, texto, tipo, it = {}) {
 
 // respostas sem IA (grátis)
 const sorteia = (a) => a[Math.floor(Math.random() * a.length)];
+// bordões de abertura: nunca o mesmo em falas seguidas
+const BORDOES = ['Ai, ai...', 'Ai, meu Deus...', 'Nem me fala...', 'Olha, sinceramente...', 'Ah, rapaz...', 'Pois é...', 'Minha nossa...', 'Eita...', 'Vixe...', 'Misericórdia...', 'Puxa vida...', 'Ô, vida...', 'Pelo amor de Deus...', 'Rapaz...', 'Ai...'];
+const semAcento = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+const CHAVES_BORDAO = [...new Set([...BORDOES, 'Tô até tonto de tanta conta', 'Olha', 'Ah', 'Ô'].map(semAcento))].sort((a, b) => b.length - a.length);
+function variaBordao(txt) {
+  const n = semAcento(txt);
+  const k = CHAVES_BORDAO.find(c => n === c || n.startsWith(c + ' '));
+  if (k && sessao.aberturas.includes(k)) {
+    // tira o bordão repetido do começo e põe outro que não foi usado nas últimas falas
+    let i = 0; while (i < txt.length && semAcento(txt.slice(0, i)) !== k) i++;
+    const resto = txt.slice(i).replace(/^[\s.,!?…]+/, '');
+    const novo = sorteia(BORDOES.filter(b => !sessao.aberturas.includes(semAcento(b)) && semAcento(b) !== 'ai'));
+    txt = novo + ' ' + resto;
+    return { txt: txt.trim(), k: semAcento(novo) };
+  }
+  return { txt, k };
+}
 const TEMAS = ['conta de luz', 'conta de água', 'botijão de gás', 'mercado e promoções', 'roupas e sapatos velhos', 'passagem de ônibus', 'comida que sobra', 'celular e internet', 'presente de aniversário', 'consertar em vez de comprar', 'banho', 'geladeira', 'pasta de dente e sabonete', 'festa da família', 'restaurante', 'ventilador e calor', 'guardar recibos', 'carro e gasolina', 'cartão de crédito', 'feira no fim do dia'];
 const MONOLOGOS = [
   "Sabonete pequeno não se joga fora: gruda no novo e vira um só. Economia de verdade é nos detalhes.",
@@ -312,7 +330,7 @@ const ANGULOS_PRESENTE = [
   'nunca ninguém deu nada pra ele de graça, nem bom dia, porque bom dia também gasta saliva',
   'vai colocar o nome da pessoa na lista de convidados do churrasco que ele nunca vai fazer',
 ];
-const sessao = { presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
@@ -351,6 +369,8 @@ async function processa() {
     if (m && it.podeAcao) it.acao = m[1].toLowerCase();
     resposta = resposta.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 360);
     if (it.acao) { sessao.ultimaAcao = Date.now(); console.log('Movimento:', it.acao); }
+    { const v = variaBordao(resposta); if (v.txt !== resposta) console.log('Bordão trocado para não repetir:', v.k); resposta = v.txt; sessao.aberturas.push(v.k || '-'); if (sessao.aberturas.length > 3) sessao.aberturas.shift(); }
+    sessao.aberturas = sessao.aberturas.filter(Boolean);
     let qual = 'fish', buf = null;
     const chaveCache = sessao.voz + '|' + resposta;
     if (it.tipo === 'monologo' && cacheVoz.has(chaveCache)) { buf = cacheVoz.get(chaveCache); qual = 'fish (guardado)'; }
@@ -361,6 +381,7 @@ async function processa() {
     if (buf) { const id = randomUUID(); audios.set(id, { buf, t: Date.now() }); audio = '/audio/' + id; }
     sessao.pendentes++; sessao.ultimaFala = Date.now();
     if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
+    if (it.tipo === 'comentario') { sessao.respondidos.set(it.nome, Date.now()); if (sessao.respondidos.size > 300) sessao.respondidos.clear(); }
     if (it.tipo === 'presente') { sessao.presentes.push(resposta); if (sessao.presentes.length > 6) sessao.presentes.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
     io.emit('fala', { acao: it.acao || null, vip: !!it.vip, danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
@@ -425,6 +446,7 @@ async function conectar(usuario) {
     const texto = (d.content ?? d.comment ?? '').trim();
     console.log('Comentário:', nome, '→', texto);
     if (!comentarioOk(nome, texto)) { console.log('  (ignorado: repetido, link ou só emoji)'); return; }
+    if (Date.now() - (sessao.respondidos.get(nome) || 0) < 20000 || sessao.fila.some(i => i.nome === nome && i.tipo === 'comentario')) { console.log('  (ignorado: essa pessoa já tem uma mensagem na fila, responde só a primeira)'); return; }
     enfileira(itemComentario(nome, foto(d.user), texto));
   });
   live.on(WebcastEvent.GIFT, (d) => {
