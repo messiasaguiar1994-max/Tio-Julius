@@ -103,7 +103,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
   let pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
-    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} A sua fala vai COMEÇAR com: "${it.abertura}" (isso já vai ser dito, NÃO repita). Escreva SÓ A CONTINUAÇÃO: uma frase (até 25 palavras) com um fato absurdo de pão-duro sobre o que você vai fazer com o presente. Não agradeça de novo, não diga "obrigado", "valeu" nem "emocionado", e não comece com o nome da pessoa. Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
+    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} A sua fala vai COMEÇAR com: "${it.abertura}" (isso já vai ser dito, NÃO repita). Escreva SÓ A CONTINUAÇÃO: uma frase (até 25 palavras) com um fato absurdo de pão-duro sobre o que você vai fazer com o presente. Não agradeça de novo (sem "obrigado" ou "valeu") e não comece com o nome da pessoa. Pode falar da emoção e de chorar, desde que seja de um jeito diferente das falas recentes e termine num fato absurdo (ex.: "Deu até vontade de chorar, mas vou chorar num copo pra aproveitar a água nas plantas."). Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
       : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
@@ -116,7 +116,9 @@ async function respostaIA(nome, texto, tipo, it = {}) {
   const comAbertura = (t) => {
     if (tipo !== 'presente' || !it.abertura) return t;
     t = t.replace(/^["“]|["”]$/g, '').trim();
-    const sem = t.replace(/^[^.!?…]*(obrigad|valeu|emocionad)[^.!?…]*[.!?…]+\s*/i, ''); // se agradeceu de novo, tira
+    // se a 1ª frase for só um agradecimento curto repetido ("Muito obrigado, Ana!"), tira; frase com história fica
+    const m = t.match(/^[^.!?…]*[.!?…]+\s*/);
+    const sem = m && /obrigad|valeu/i.test(m[0]) && m[0].trim().split(/\s+/).length <= 7 ? t.slice(m[0].length) : t;
     return it.abertura + ' ' + (sem || t);
   };
   if (sessao.aberturas.some(k => k !== '-')) pedido += `\nNão comece com estes lamentos, que você acabou de usar: ${sessao.aberturas.filter(k => k !== '-').map(k => '"' + k + '"').join(', ')}.`;
