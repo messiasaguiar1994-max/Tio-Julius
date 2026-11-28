@@ -103,7 +103,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
   let pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
-    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} Agradeça emocionado, numa frase só (até 30 palavras), com um fato absurdo de pão-duro. Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
+    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} A sua fala vai COMEÇAR com: "${it.abertura}" (isso já vai ser dito, NÃO repita). Escreva SÓ A CONTINUAÇÃO: uma frase (até 25 palavras) com um fato absurdo de pão-duro sobre o que você vai fazer com o presente. Não agradeça de novo, não diga "obrigado", "valeu" nem "emocionado", e não comece com o nome da pessoa. Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
       : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
@@ -113,6 +113,12 @@ async function respostaIA(nome, texto, tipo, it = {}) {
             ? ' (Você acabou de dançar faz pouco tempo: diga que precisa recuperar o fôlego e economizar a sola do sapato, e que daqui a pouco dança de novo. NUNCA mencione presentes.)'
             : ' (Você NÃO vai dançar agora: dê uma desculpa no seu jeito aflito, ligada a cansaço, sola de sapato gasta ou contas. NUNCA mencione presentes, rosas ou o que a pessoa poderia fazer para você dançar.)')
           : DESC_ACAO[it.acao] ? ` (${DESC_ACAO[it.acao]}. Sua fala tem que combinar com esse movimento.)` : (it.podeAcao ? ` Movimentos: se, e só se, o comentário combinar MUITO com um destes movimentos, coloque no FINAL da resposta UMA etiqueta entre colchetes, e a sua fala tem que combinar com o movimento: [capoeira] quando falarem de perigo, briga, ladrão, luta, valentão ou bairro perigoso (ex.: "Que perigoso nada, eu sei lutar capoeira!"); [sentar] quando falarem de cansaço, de andar demais, de descanso ou de sentar (ex.: "Você tem razão, melhor fazer uma pausa pra recuperar as energias antes do segundo turno."); [alongar] quando falarem de academia, exercício, preguiça, dor nas costas ou acordar cedo; [bravo] quando você ficar indignado de verdade com um preço absurdo, uma conta altíssima ou alguém pedindo dinheiro; [flutuar] quando falarem de mágica, milagre, voar ou paz (ex.: o dinheiro que some por mágica). Na maioria das respostas NÃO use etiqueta nenhuma.` : ''));
+  const comAbertura = (t) => {
+    if (tipo !== 'presente' || !it.abertura) return t;
+    t = t.replace(/^["“]|["”]$/g, '').trim();
+    const sem = t.replace(/^[^.!?…]*(obrigad|valeu|emocionad)[^.!?…]*[.!?…]+\s*/i, ''); // se agradeceu de novo, tira
+    return it.abertura + ' ' + (sem || t);
+  };
   if (sessao.aberturas.some(k => k !== '-')) pedido += `\nNão comece com estes lamentos, que você acabou de usar: ${sessao.aberturas.filter(k => k !== '-').map(k => '"' + k + '"').join(', ')}.`;
   if (OPENAI_API_KEY) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
@@ -126,7 +132,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
         if (r.status === 404 || r.status === 400) { console.log('OpenAI modelo', model, r.status); continue; }
         if (!r.ok) throw new Error('OpenAI ' + r.status + ' ' + (await r.text()).slice(0, 200));
         const j = await r.json(); const t = j.choices?.[0]?.message?.content?.trim();
-        if (t) return t;
+        if (t) return comAbertura(t);
       } catch (e) { console.log('Erro OpenAI:', e.message); break; }
     }
   }
@@ -138,7 +144,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
       });
       if (!r.ok) throw new Error('Gemini ' + r.status + ' ' + (await r.text()).slice(0, 200));
       const j = await r.json(); const t = j.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
-      if (t) return t;
+      if (t) return comAbertura(t);
     } catch (e) { console.log('Erro Gemini:', e.message); }
   }
   return frasePronta(nome, texto, tipo);
@@ -314,6 +320,24 @@ const DESC_ACAO = {
   flutuar: 'Você vai FLUTUAR no ar agora, como mágica',
   bravo: 'Você está BRAVO e indignado agora',
 };
+const ABERTURAS_PRESENTE = [
+  (n, g) => `Ô ${n}, ${g.um} ${g.nome}?!`,
+  (n, g) => `${n}, você não existe!`,
+  (n, g) => `Gente, olha o que ${n} acabou de fazer!`,
+  (n, g) => `Para tudo! ${n} mandou ${g.um} ${g.nome}!`,
+  (n, g) => `${n}, assim você me desmonta...`,
+  (n, g) => `Meu coração, ${n}...`,
+  (n, g) => `Eu não acredito, ${n}!`,
+  (n, g) => `Valeu demais, ${n}!`,
+  (n, g) => `Opa, ${n}! Chegou presente!`,
+  (n, g) => `Olha só quem lembrou de mim: ${n}!`,
+  (n, g) => `${n}, ${g.um} ${g.nome} pra mim? Sério?`,
+  (n, g) => `Misericórdia, ${n}...`,
+  (n, g) => `Que gesto bonito, ${n}!`,
+  (n, g) => `${n}, Deus te pague... porque eu não posso!`,
+  (n, g) => `Muito obrigado pela ${g.nome === 'rosa' ? 'rosa' : 'força'}, ${n}!`,
+  (n, g) => `${n}, tô até sem palavras...`,
+];
 const ANGULOS_PRESENTE = [
   'é o primeiro presente que você ganha desde a amostra grátis de queijo no supermercado em 1998',
   'vai emoldurar e pendurar na sala, e cobrar entrada dos parentes que quiserem ver',
@@ -330,7 +354,7 @@ const ANGULOS_PRESENTE = [
   'nunca ninguém deu nada pra ele de graça, nem bom dia, porque bom dia também gasta saliva',
   'vai colocar o nome da pessoa na lista de convidados do churrasco que ele nunca vai fazer',
 ];
-const sessao = { respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { abPresente: [], respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
@@ -353,6 +377,12 @@ async function processa() {
       it.acao = sessao.acaoPresente = sorteia(opcoes);
     }
     if (it.tipo === 'presente') {
+      const g = /rose|rosa/i.test(it.texto || '') ? { um: 'uma', nome: 'rosa' } : { um: 'um', nome: 'presente' };
+      const idx = sorteia(ABERTURAS_PRESENTE.map((_, k) => k).filter(k => !sessao.abPresente.includes(k)));
+      sessao.abPresente.push(idx); if (sessao.abPresente.length > 5) sessao.abPresente.shift();
+      it.abertura = ABERTURAS_PRESENTE[idx](limpaNome(it.nome), g);
+    }
+    if (it.tipo === 'presente') {
       const livres = ANGULOS_PRESENTE.filter(a => !sessao.angulos.includes(a));
       it.angulo = sorteia(livres.length ? livres : ANGULOS_PRESENTE);
       sessao.angulos.push(it.angulo); if (sessao.angulos.length > 8) sessao.angulos.shift();
@@ -369,7 +399,7 @@ async function processa() {
     if (m && it.podeAcao) it.acao = m[1].toLowerCase();
     resposta = resposta.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 360);
     if (it.acao) { sessao.ultimaAcao = Date.now(); console.log('Movimento:', it.acao); }
-    { const v = variaBordao(resposta); if (v.txt !== resposta) console.log('Bordão trocado para não repetir:', v.k); resposta = v.txt; sessao.aberturas.push(v.k || '-'); if (sessao.aberturas.length > 3) sessao.aberturas.shift(); }
+    if (it.tipo !== 'presente') { const v = variaBordao(resposta); if (v.txt !== resposta) console.log('Bordão trocado para não repetir:', v.k); resposta = v.txt; sessao.aberturas.push(v.k || '-'); if (sessao.aberturas.length > 3) sessao.aberturas.shift(); } else { sessao.aberturas.push('-'); if (sessao.aberturas.length > 3) sessao.aberturas.shift(); }
     sessao.aberturas = sessao.aberturas.filter(Boolean);
     let qual = 'fish', buf = null;
     const chaveCache = sessao.voz + '|' + resposta;
