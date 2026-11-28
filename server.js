@@ -375,7 +375,7 @@ const ANGULOS_PRESENTE = [
   'nunca ninguém deu nada pra ele de graça, nem bom dia, porque bom dia também gasta saliva',
   'vai colocar o nome da pessoa na lista de convidados do churrasco que ele nunca vai fazer',
 ];
-const sessao = { ultimaHistoria: 0, historiasContadas: [], abPresente: [], respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { seguidasPrior: 0, ultimaHistoria: 0, historiasContadas: [], abPresente: [], respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
@@ -385,11 +385,24 @@ function enfileira(item, prioridade = false) {
   sessao.fila = [...pres.slice(0, 4), ...vips.slice(0, 5), ...resto];
   processa();
 }
+// intercala: no máximo 3 de prioridade (presente ou quem mandou presente) seguidos; depois 1 comentário normal, se tiver
+const PRIORIDADE_SEGUIDAS = 3;
+const ehPrioridade = (i) => i.tipo === 'presente' || i.vip;
+function proximoDaFila() {
+  let k = 0;
+  if (sessao.seguidasPrior >= PRIORIDADE_SEGUIDAS) {
+    const n = sessao.fila.findIndex(i => !ehPrioridade(i));
+    if (n >= 0) k = n;
+  }
+  const it = sessao.fila.splice(k, 1)[0];
+  sessao.seguidasPrior = ehPrioridade(it) ? sessao.seguidasPrior + 1 : 0;
+  return it;
+}
 async function processa() {
   if (sessao.ocupado || !sessao.fila.length) return;
   if (sessao.pendentes >= 2) { console.log('Aguardando a tela tocar as falas anteriores (pendentes:', sessao.pendentes + ')'); return; }
   sessao.ocupado = true;
-  const it = sessao.fila.shift();
+  const it = proximoDaFila();
   try {
     const livre = (seg) => Date.now() - sessao.ultimaAcao > seg * 1000;
     if (it.danca) it.acao = 'danca';
