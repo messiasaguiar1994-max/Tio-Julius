@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import { randomUUID } from 'crypto';
 import { TikTokLiveConnection, WebcastEvent, ControlEvent } from 'tiktok-live-connector';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+import HISTORIAS from './historias.js';
 
 const PORT = process.env.PORT || 3000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
@@ -104,7 +105,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
   let pedido = tipo === 'monologo'
     ? `Ninguém comentou agora. Fale sozinho, como quem comenta enquanto anda pela rua do bairro, UMA frase curta (até 25 palavras) sobre como você economiza no dia a dia. Assunto desta vez: ${texto}. Pode ser uma gambiarra caseira, um truque de pão-duro, uma reclamação engraçada de preço ou um conselho de economia. Não cumprimente ninguém e não fale com o chat. Não repita nenhuma destas falas recentes: ${sessao.monologos.join(' | ') || 'nenhuma'}`
     : tipo === 'presente'
-    ? `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} A sua fala vai COMEÇAR com: "${it.abertura}" (isso já vai ser dito, NÃO repita). Escreva SÓ A CONTINUAÇÃO: uma frase (até 25 palavras) com um fato absurdo de pão-duro sobre o que você vai fazer com o presente. Não agradeça de novo (sem "obrigado" ou "valeu") e não comece com o nome da pessoa. Pode falar da emoção e de chorar, desde que seja de um jeito diferente das falas recentes e termine num fato absurdo (ex.: "Deu até vontade de chorar, mas vou chorar num copo pra aproveitar a água nas plantas."). Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`
+    ? (it.historia ? `${limpaNome(nome)} mandou um presente (${texto}${it.valioso ? ', um presente valioso' : ''}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} A sua fala vai COMEÇAR com: "${it.abertura}" (isso já vai ser dito, NÃO repita e não agradeça de novo). Escreva SÓ A CONTINUAÇÃO: o presente despertou uma LEMBRANÇA do seu passado e você conta como numa conversa espontânea, nunca como leitura: pode puxar a lembrança pelo presente (ex.: "Uma rosa... isso me lembra 1987..."), interromper pra se lembrar de um detalhe, se orgulhar seriamente da sua mesquinharia e se indignar com qualquer gasto. Tem que ter começo, meio e um final engraçado. Entre 45 e 85 palavras, em 3 a 6 frases curtas. Não use nomes da esposa ou dos filhos. ${it.historia === 'improviso' ? `INVENTE uma história nova, com ano, objeto e situação absurda de mesquinharia (economia absurda, reaproveitar coisas, negociação vergonhosa, aproveitar algo de graça), diferente destas que você já contou: ${sessao.historiasContadas.join(' | ') || 'nenhuma'}.` : `A lembrança é esta (adapte as palavras, mantenha a ideia, o absurdo e o final): «${it.historia.texto}»`}` : `${limpaNome(nome)} mandou um presente (${texto}).${it.acao === 'cambalhota' ? ' Você está dando uma cambalhota de alegria agora mesmo: pode mencionar isso.' : it.acao === 'danca' ? ' Você está fazendo uma dancinha de alegria agora mesmo: pode mencionar isso.' : ''} A sua fala vai COMEÇAR com: "${it.abertura}" (isso já vai ser dito, NÃO repita). Escreva SÓ A CONTINUAÇÃO: uma frase (até 25 palavras) com um fato absurdo de pão-duro sobre o que você vai fazer com o presente. Não agradeça de novo (sem "obrigado" ou "valeu") e não comece com o nome da pessoa. Pode falar da emoção e de chorar, desde que seja de um jeito diferente das falas recentes e termine num fato absurdo (ex.: "Deu até vontade de chorar, mas vou chorar num copo pra aproveitar a água nas plantas."). Ideia desta vez: ${it.angulo}. NUNCA diga que o presente vai pagar contas, ajudar nas despesas ou que você precisa de presentes. Não repita nem imite estes agradecimentos recentes: ${sessao.presentes.join(' | ') || 'nenhum'}`)
     : tipo === 'chegada'
       ? `${limpaNome(nome)} acabou de entrar na live. Dê boas-vindas curtinha e engraçada, numa frase só.`
       : `Comentário de ${limpaNome(nome)}: "${texto}"` + (it.danca
@@ -127,7 +128,7 @@ async function respostaIA(nome, texto, tipo, it = {}) {
     for (const model of [...new Set([OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-mini'])]) {
       try {
         const body = { model, messages: [{ role: 'system', content: PERSONA }, { role: 'user', content: pedido }] };
-        if (/^gpt-5/.test(model)) body.max_completion_tokens = 400; else { body.max_tokens = 150; body.temperature = .9; }
+        if (/^gpt-5/.test(model)) body.max_completion_tokens = it.historia ? 700 : 400; else { body.max_tokens = it.historia ? 320 : 150; body.temperature = .9; }
         const r = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST', headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body), signal: AbortSignal.timeout(12000),
@@ -143,13 +144,15 @@ async function respostaIA(nome, texto, tipo, it = {}) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(12000),
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: PERSONA }] }, contents: [{ role: 'user', parts: [{ text: pedido }] }], generationConfig: { maxOutputTokens: 120, temperature: .9, thinkingConfig: { thinkingBudget: 0 } } }),
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: PERSONA }] }, contents: [{ role: 'user', parts: [{ text: pedido }] }], generationConfig: { maxOutputTokens: it.historia ? 320 : 120, temperature: .9, thinkingConfig: { thinkingBudget: 0 } } }),
       });
       if (!r.ok) throw new Error('Gemini ' + r.status + ' ' + (await r.text()).slice(0, 200));
       const j = await r.json(); const t = j.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
       if (t) return comAbertura(t);
     } catch (e) { console.log('Erro Gemini:', e.message); }
   }
+  // sem IA: conta a história da biblioteca do jeito que está escrita (sem o "obrigado" do começo, a abertura já agradece)
+  if (tipo === 'presente' && it.historia?.texto) return it.abertura + ' ' + it.historia.texto.replace(/^[^.!?]*(obrigad|valeu)[^.!?]*[.!?]\s*/i, '');
   return frasePronta(nome, texto, tipo);
 }
 
@@ -285,7 +288,7 @@ async function vozEdge(texto) {
     const safe = texto.replace(/[<>&]/g, ' ');
     const { audioStream } = edge.toStream(safe, { rate: '+4%', pitch: '-6Hz' });
     const chunks = [];
-    await new Promise((res, rej) => { audioStream.on('data', c => chunks.push(c)); audioStream.on('close', res); audioStream.on('end', res); audioStream.on('error', rej); setTimeout(() => rej(new Error('timeout')), 15000); });
+    await new Promise((res, rej) => { audioStream.on('data', c => chunks.push(c)); audioStream.on('close', res); audioStream.on('end', res); audioStream.on('error', rej); setTimeout(() => rej(new Error('timeout')), 30000); });
     const buf = Buffer.concat(chunks); if (buf.length < 500) throw new Error('áudio vazio');
     return buf;
   } catch (e) { console.log('Erro voz Microsoft:', e.message); try { edge?.close(); } catch { } edge = null; return null; }
@@ -302,7 +305,7 @@ async function vozFish(texto, voz) {
   texto = comEmocao(texto);
   try {
     const r = await fetch('https://api.fish.audio/v1/tts', {
-      method: 'POST', signal: AbortSignal.timeout(20000),
+      method: 'POST', signal: AbortSignal.timeout(40000),
       headers: { Authorization: `Bearer ${FISH_API_KEY}`, 'Content-Type': 'application/json', model: FISH_MODEL },
       body: JSON.stringify({ text: texto, reference_id: voz, format: 'mp3', mp3_bitrate: 64, latency: 'balanced', normalize: true }),
     });
@@ -327,6 +330,14 @@ const DESC_ACAO = {
   flutuar: 'Você vai FLUTUAR no ar agora, como mágica',
   bravo: 'Você está BRAVO e indignado agora',
 };
+// histórias de presente: baralho (só repete depois de usar todas), às vezes improvisa uma nova
+let baralhoHist = [];
+function proximaHistoria() {
+  if (!baralhoHist.length) { baralhoHist = [...HISTORIAS]; for (let i = baralhoHist.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [baralhoHist[i], baralhoHist[k]] = [baralhoHist[k], baralhoHist[i]]; } }
+  return baralhoHist.pop();
+}
+const CHANCE_HISTORIA = Number(process.env.CHANCE_HISTORIA || 0.4); // 40% dos presentes (quando não tem outro presente na fila)
+const INTERVALO_HISTORIA = 75e3; // no mínimo 75 s entre uma história e outra
 const ABERTURAS_PRESENTE = [
   (n, g) => `Ô ${n}, ${g.um} ${g.nome}?!`,
   (n, g) => `${n}, você não existe!`,
@@ -361,7 +372,7 @@ const ANGULOS_PRESENTE = [
   'nunca ninguém deu nada pra ele de graça, nem bom dia, porque bom dia também gasta saliva',
   'vai colocar o nome da pessoa na lista de convidados do churrasco que ele nunca vai fazer',
 ];
-const sessao = { abPresente: [], respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
+const sessao = { ultimaHistoria: 0, historiasContadas: [], abPresente: [], respondidos: new Map(), aberturas: [], presentes: [], angulos: [], acaoPresente: '', prioridade: new Map(), ultimaAcao: 0, ultimaDanca: 0, voz: FISH_VOICE_ID, pendentes: 0, fila: [], ocupado: false, ultimaChegada: 0, vistos: new Map(), ultimaFala: Date.now(), monologos: [] };
 function enfileira(item, prioridade = false) {
   if (prioridade) sessao.fila.unshift(item); else sessao.fila.push(item);
   // ordem: presentes, depois comentários de quem mandou presente (vip), depois o resto (só os 5 mais novos)
@@ -389,6 +400,12 @@ async function processa() {
       sessao.abPresente.push(idx); if (sessao.abPresente.length > 5) sessao.abPresente.shift();
       it.abertura = ABERTURAS_PRESENTE[idx](limpaNome(it.nome), g);
     }
+    if (it.tipo === 'presente' && Date.now() - sessao.ultimaHistoria > INTERVALO_HISTORIA
+      && !sessao.fila.some(i => i.tipo === 'presente') && Math.random() < CHANCE_HISTORIA) {
+      it.historia = Math.random() < 0.25 ? 'improviso' : proximaHistoria();
+      sessao.ultimaHistoria = Date.now();
+      console.log('História no presente:', it.historia === 'improviso' ? 'improvisada' : it.historia.n + ' - ' + it.historia.titulo);
+    }
     if (it.tipo === 'presente') {
       const livres = ANGULOS_PRESENTE.filter(a => !sessao.angulos.includes(a));
       it.angulo = sorteia(livres.length ? livres : ANGULOS_PRESENTE);
@@ -404,7 +421,7 @@ async function processa() {
     let resposta = (await respostaIA(it.nome, it.texto, it.tipo, it)).replace(/\s+/g, ' ');
     const m = resposta.match(/\[(capoeira|sentar|alongar|bravo|flutuar)\]/i);
     if (m && it.podeAcao) it.acao = m[1].toLowerCase();
-    resposta = resposta.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 360);
+    resposta = resposta.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().slice(0, it.historia ? 800 : 360);
     if (it.acao) { sessao.ultimaAcao = Date.now(); console.log('Movimento:', it.acao); }
     if (it.tipo !== 'presente') { const v = variaBordao(resposta); if (v.txt !== resposta) console.log('Bordão trocado para não repetir:', v.k); resposta = v.txt; sessao.aberturas.push(v.k || '-'); if (sessao.aberturas.length > 3) sessao.aberturas.shift(); } else { sessao.aberturas.push('-'); if (sessao.aberturas.length > 3) sessao.aberturas.shift(); }
     sessao.aberturas = sessao.aberturas.filter(Boolean);
@@ -419,6 +436,7 @@ async function processa() {
     sessao.pendentes++; sessao.ultimaFala = Date.now();
     if (it.tipo === 'monologo') { sessao.monologos.push(resposta); if (sessao.monologos.length > 12) sessao.monologos.shift(); }
     if (it.tipo === 'comentario') { sessao.respondidos.set(it.nome, Date.now()); if (sessao.respondidos.size > 300) sessao.respondidos.clear(); }
+    if (it.historia) { sessao.historiasContadas.push(resposta.slice(0, 140)); if (sessao.historiasContadas.length > 6) sessao.historiasContadas.shift(); }
     if (it.tipo === 'presente') { sessao.presentes.push(resposta); if (sessao.presentes.length > 6) sessao.presentes.shift(); }
     console.log('Fala enviada:', it.nome, '|', resposta.slice(0, 60), '| voz:', qual, '| telas abertas:', io.engine.clientsCount);
     io.emit('fala', { acao: it.acao || null, vip: !!it.vip, danca: !!it.danca, id: randomUUID(), nome: it.nome, foto: it.foto, pergunta: it.tipo === 'comentario' ? it.texto : (it.tipo === 'presente' ? '🎁 ' + it.texto : ''), resposta, audio, tipo: it.tipo });
@@ -493,7 +511,8 @@ async function conectar(usuario) {
     const giftName = d.giftDetails?.giftName || d.gift?.name || d.extendedGiftInfo?.name || 'presente';
     console.log('Presente:', nome, '→', giftName);
     sessao.prioridade.set(nome, Math.min(5, (sessao.prioridade.get(nome) || 0) + 1)); // 1 comentário com prioridade por presente
-    enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName }, true);
+    const qtd = Number(d.repeatCount || 1), valor = Number(d.giftDetails?.diamondCount || d.gift?.diamondCount || 0) * qtd;
+    enfileira({ tipo: 'presente', nome, foto: foto(d.user), texto: giftName + (qtd > 1 ? ' x' + qtd : ''), valioso: valor >= 99 }, true);
   });
   live.on(WebcastEvent.FOLLOW, (d) => {
     const nome = nomeDe(d); if (!nome) return;
@@ -533,7 +552,7 @@ io.on('connection', (s) => {
     if (!teste) { clearInterval(testeTimer); testeTimer = null; sessao.fila = sessao.fila.filter(i => !TESTE.some(([n]) => n === i.nome)); }
     if (teste) {
       clearInterval(testeTimer);
-      const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira(itemComentario(n, '', t)); if (testeK % 3 === 0) io.emit('seguiu', { nome: n, foto: '' }); };
+      const tick = () => { const [n, t] = TESTE[testeK++ % TESTE.length]; enfileira(itemComentario(n, '', t)); if (testeK % 3 === 0) io.emit('seguiu', { nome: n, foto: '' }); if (testeK % 4 === 0) enfileira({ tipo: 'presente', nome: n, foto: '', texto: 'Rose' }, true); };
       setTimeout(tick, 2000); testeTimer = setInterval(tick, 15000);
     } else if (usuario) conectar(usuario.replace(/^@/, '').trim());
   });

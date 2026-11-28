@@ -40,3 +40,9 @@ Para ativar o Fish Audio, cadastre `FISH_API_KEY` e `FISH_VOICE_ID` nas variáve
 ## Para mexer no visual (avançado)
 
 O código do jogo fica em `src/`. Depois de mudar, rode `npm install` e `npm run build` para gerar `public/jogo.bundle.js`.
+
+## Histórias nos presentes
+As 50 lembranças absurdas do Tio Julius ficam no arquivo `historias.js` (dá para editar ou acrescentar lá).
+Quando alguém manda um presente, ele sempre agradece e, às vezes, conta uma história (da biblioteca ou improvisada pela IA no mesmo estilo).
+- Chance padrão: 40% dos presentes, com no mínimo 75 segundos entre uma história e outra e nunca quando há outro presente esperando na fila.
+- Para mudar a chance, crie no Render a variável `CHANCE_HISTORIA` (ex.: `0.25` = 25%, `0.6` = 60%).
